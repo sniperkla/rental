@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   XCircle,
   Shield,
+  ShieldOff,
   Zap,
   QrCode,
   Lock,
@@ -54,7 +55,7 @@ interface Device {
   serialNumber: string;
   imei: string;
   platform: 'android' | 'ios';
-  status: 'available' | 'rented' | 'locked' | 'maintenance' | 'pending';
+  status: 'available' | 'rented' | 'locked' | 'maintenance' | 'pending' | 'returned';
   color: string;
   storageGB: number;
   dailyRate: number;
@@ -466,8 +467,8 @@ function DeviceModal({ device, onClose, onSave }: { device?: Device | null; onCl
 }
 
 /* ── Configure Device Modal (post-scan) ──────────────────────────── */
-function ConfigureModal({ device, onClose, onConfigured }: { device: Device; onClose: () => void; onConfigured: () => void }) {
-  const [securityMode, setSecurityMode] = useState<'device-admin' | 'device-owner' | ''>('');
+function ConfigureModal({ device, onClose, onConfigured, isDeviceOwner = false }: { device: Device; onClose: () => void; onConfigured: () => void; isDeviceOwner?: boolean }) {
+  const [securityMode, setSecurityMode] = useState<'device-admin' | 'device-owner' | ''>(isDeviceOwner ? 'device-owner' : '');
   const [tags, setTags] = useState('');
   const [dailyRate, setDailyRate] = useState(device.dailyRate || 0);
   const [monthlyRate, setMonthlyRate] = useState(device.monthlyRate || 0);
@@ -475,6 +476,28 @@ function ConfigureModal({ device, onClose, onConfigured }: { device: Device; onC
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [adbVerified, setAdbVerified] = useState(false);
+
+  // Auto-configure immediately when coming from Setup Wizard (device is already Device Owner)
+  useEffect(() => {
+    if (isDeviceOwner) {
+      setSaving(true);
+      api.patch(`/devices/${device._id}/configure`, {
+        securityMode: 'device-owner',
+        tags: [],
+        dailyRate: device.dailyRate || 0,
+        monthlyRate: device.monthlyRate || 0,
+        notes: device.notes || '',
+      }).then(res => {
+        setResult(res.data);
+        // Since phone is already DO via Setup Wizard, mark ADB as already verified
+        setAdbVerified(true);
+        setSaving(false);
+      }).catch(err => {
+        toast(err.response?.data?.message || 'ไม่สามารถตั้งค่าได้', 'error');
+        setSaving(false);
+      });
+    }
+  }, []);
 
   const handleSave = async () => {
     if (!securityMode) {
@@ -492,7 +515,11 @@ function ConfigureModal({ device, onClose, onConfigured }: { device: Device; onC
         notes,
       });
       setResult(res.data);
-      toast('ตั้งค่าอุปกรณ์สำเร็จ', 'success');
+      if (res.data.requiresAdb) {
+        toast('บันทึกสำเร็จ — ต้องเปิดใช้งาน Device Owner ผ่าน ADB', 'success');
+      } else {
+        toast('ตั้งค่าอุปกรณ์สำเร็จ', 'success');
+      }
     } catch (err: any) {
       toast(err.response?.data?.message || 'ไม่สามารถตั้งค่าอุปกรณ์ได้', 'error');
     } finally {
@@ -550,7 +577,53 @@ function ConfigureModal({ device, onClose, onConfigured }: { device: Device; onC
               ))}
             </div>
 
+            {/* Auto-activate button (via ADB bridge) */}
+            <button
+              className="btn btn-primary"
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  const res = await api.post(`/adb-bridge/activate-device-owner/${device._id}`);
+                  if (res.data.success) {
+                    toast('Device Owner เปิดใช้งานสำเร็จ!', 'success');
+                    setAdbVerified(true);
+                  } else {
+                    toast(`ไม่สำเร็จ: ${res.data.message}`, 'error');
+                  }
+                } catch (err: any) {
+                  const msg = err.response?.data?.message || 'ADB Bridge ไม่เชื่อมต่อ';
+                  toast(msg, 'error');
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              disabled={saving}
+              style={{ width: '100%' }}
+            >
+              {saving ? <><Loader2 size={16} className="animate-spin" style={{ marginRight: 6 }} /> กำลังเปิดใช้งาน...</> : <><Zap size={16} style={{ marginRight: 6 }} /> Activate Device Owner (Auto)</>}
+            </button>
+
+            <div style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>— หรือรันคำสั่ง ADB ด้วยตนเอง —</div>
+
             <AdbCommandBlock command={result.adbCommand} />
+
+            {/* Recovery Code (shown once, admin must save) */}
+            {result.recoveryCode && (
+              <div style={{ background: 'rgba(245,158,11,0.08)', border: '2px solid rgba(245,158,11,0.4)', borderRadius: '8px', padding: '16px', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                  <AlertTriangle size={16} color="#f59e0b" />
+                  <span style={{ fontWeight: 700, fontSize: '13px', color: '#f59e0b' }}>รหัสกู้คืนฉุกเฉิน (Emergency Recovery Code)</span>
+                </div>
+                <div style={{ fontFamily: 'monospace', fontSize: '24px', fontWeight: 700, color: '#f59e0b', textAlign: 'center', padding: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', letterSpacing: '4px', marginBottom: '8px' }}>
+                  {result.recoveryCode}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
+                  <strong>บันทึกรหัสนี้ไว้!</strong> จะแสดงแค่ครั้งเดียว<br />
+                  ใช้ปลดล็อคเครื่องฉุกเฉินเมื่อเซิร์ฟเวอร์ไม่สามารถเข้าถึงได้<br />
+                  ลูกค้าจะเห็นช่องกรอกรหัสบนหน้าจอล็อคเมื่อออฟไลน์เกิน 2 ชั่วโมง
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '8px' }}>
               <Loader2 size={16} className="animate-spin" color="#60a5fa" />
@@ -656,6 +729,11 @@ function ConfigureModal({ device, onClose, onConfigured }: { device: Device; onC
               }}>
                 <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}><Smartphone size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Device Admin — ตั้งค่าง่าย</div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>ล็อค/ปลดล็อค + แสดงข้อความหน้าจอ | ลูกค้า factory reset หลุดได้</div>
+                {device.securityMode === 'device-owner' && (
+                  <div style={{ fontSize: '10px', color: '#f59e0b', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertTriangle size={10} /> เครื่องนี้เป็น Device Owner อยู่แล้ว — การเลือก Device Admin จะไม่ลบ Device Owner ออก
+                  </div>
+                )}
               </button>
               <button type="button" onClick={() => setSecurityMode('device-owner')} style={{
                 padding: '14px', borderRadius: '8px', textAlign: 'left', cursor: 'pointer',
@@ -708,6 +786,8 @@ function ConfigureModal({ device, onClose, onConfigured }: { device: Device; onC
 
 function GlobalRegisterModal({ onClose, initialDeviceCount, onDeviceRegistered }: { onClose: () => void; initialDeviceCount: number; onDeviceRegistered?: (device: any) => void }) {
   const [data, setData] = useState<any>(null);
+  const [provisioningData, setProvisioningData] = useState<any>(null);
+  const [setupMethod, setSetupMethod] = useState<'wizard' | 'scanner'>('wizard');
   const [loading, setLoading] = useState(true);
   const [registeredDevice, setRegisteredDevice] = useState<any>(null);
   const enrolledIdsRef = useRef<Set<string>>(new Set());
@@ -728,6 +808,10 @@ function GlobalRegisterModal({ onClose, initialDeviceCount, onDeviceRegistered }
         const res = await api.get('/mdm/standalone/registration-qr');
         if (active) {
           setData(res.data);
+          try {
+            const provRes = await api.get(`/dpc/provisioning-qr?registrationToken=${res.data.registrationToken}`);
+            if (active) setProvisioningData(provRes.data);
+          } catch (e) { /* silently ignore */ }
         }
       } catch (err) {
         toast('ไม่สามารถดึงข้อมูลรหัสลงทะเบียนรวมได้', 'error');
@@ -770,14 +854,18 @@ function GlobalRegisterModal({ onClose, initialDeviceCount, onDeviceRegistered }
     return () => clearInterval(interval);
   }, [data, initialDeviceCount, registeredDevice]);
 
-  // Auto-open ConfigureModal after device detected (with delay for success animation)
+  // Auto-open ConfigureModal immediately when device detected (only if not already configured)
   useEffect(() => {
     if (registeredDevice && onDeviceRegistered) {
-      const timer = setTimeout(() => {
+      // Check if device is already configured (has securityMode and configuredAt)
+      if (registeredDevice.securityMode && registeredDevice.configuredAt) {
+        // Device is already configured, just refresh and close
+        onClose();
+      } else {
+        // Device needs configuration, open ConfigureModal
         onDeviceRegistered(registeredDevice);
         onClose();
-      }, 2000);
-      return () => clearTimeout(timer);
+      }
     }
   }, [registeredDevice]);
 
@@ -864,23 +952,74 @@ function GlobalRegisterModal({ onClose, initialDeviceCount, onDeviceRegistered }
           ) : qrUrl ? (
             /* ── QR Display + Waiting State ─────────────────── */
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px', width: '100%' }}>
-              <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                <img src={qrUrl} alt="Registration QR Code" style={{ width: '240px', height: '240px' }} />
-              </div>
               
-              <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '8px', padding: '12px', textAlign: 'left', width: '100%' }}>
-                <div style={{ fontWeight: 600, fontSize: '13px', color: '#60a5fa', marginBottom: '6px' }}><Key size={14} style={{verticalAlign:'middle',marginRight:4}} /> รายละเอียด QR รวม:</div>
-                <div style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div><strong>URL:</strong> {data.backendUrl}</div>
-                  <div><strong>Token:</strong> {data.registrationToken}</div>
-                </div>
+              <div style={{ display: 'flex', gap: '8px', background: 'var(--surface-secondary, rgba(255,255,255,0.04))', padding: '4px', borderRadius: '10px', width: '100%' }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setSetupMethod('wizard')}
+                  style={{
+                    flex: 1, padding: '8px 12px', borderRadius: '8px', border: `1px solid ${setupMethod === 'wizard' ? 'var(--purple-500)' : 'var(--border)'}`,
+                    background: setupMethod === 'wizard' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                    color: setupMethod === 'wizard' ? 'var(--purple-300)' : 'var(--text-muted)',
+                    fontSize: '12px', fontWeight: setupMethod === 'wizard' ? 600 : 400
+                  }}
+                >
+                  <Smartphone size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Setup Wizard (เครื่องใหม่)
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setSetupMethod('scanner')}
+                  style={{
+                    flex: 1, padding: '8px 12px', borderRadius: '8px', border: `1px solid ${setupMethod === 'scanner' ? 'var(--purple-500)' : 'var(--border)'}`,
+                    background: setupMethod === 'scanner' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                    color: setupMethod === 'scanner' ? 'var(--purple-300)' : 'var(--text-muted)',
+                    fontSize: '12px', fontWeight: setupMethod === 'scanner' ? 600 : 400
+                  }}
+                >
+                  <QrCode size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> In-App Scanner (มีแอปแล้ว)
+                </button>
               </div>
 
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                1. เปิดแอป <strong>Rental DPC</strong> บนอุปกรณ์มือถือลูกค้า<br />
-                2. กดปุ่ม <strong>Scan QR</strong> แล้วสแกนสัญลักษณ์ด้านบนนี้<br />
-                3. แอปจะส่งข้อมูลสเปกเครื่องเพื่อลงทะเบียนสร้างเครื่องใหม่ในฐานข้อมูลให้ทันที!
-              </div>
+              {setupMethod === 'wizard' ? (
+                <>
+                  <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                    {provisioningData ? (
+                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(provisioningData.payloadJson)}&margin=2`} alt="Setup Wizard Auto-Register QR" style={{ width: '220px', height: '220px' }} />
+                    ) : (
+                      <div style={{ width: '220px', height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loader2 size={24} className="animate-spin" /></div>
+                    )}
+                  </div>
+                  
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5', textAlign: 'left', width: '100%', background: 'rgba(0,0,0,0.15)', padding: '12px', borderRadius: '8px' }}>
+                    <strong>วิธีใช้งาน (เครื่องใหม่ / Factory Reset):</strong><br />
+                    1. หน้าแรกสุด (Welcome) กดรัวๆ ที่หน้าจอ 6 ครั้ง<br />
+                    2. กล้องจะเปิดขึ้น ให้สแกน QR นี้<br />
+                    3. เครื่องจะติดตั้งแอป และลงทะเบียนเข้าระบบให้อัตโนมัติ!
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                    <img src={qrUrl} alt="Registration QR Code" style={{ width: '220px', height: '220px' }} />
+                  </div>
+                  
+                  <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '8px', padding: '12px', textAlign: 'left', width: '100%' }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: '#60a5fa', marginBottom: '6px' }}><Key size={14} style={{verticalAlign:'middle',marginRight:4}} /> รายละเอียด QR รวม:</div>
+                    <div style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div><strong>URL:</strong> {data.backendUrl}</div>
+                      <div><strong>Token:</strong> {data.registrationToken}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5', textAlign: 'left', width: '100%' }}>
+                    1. เปิดแอป <strong>Rental DPC</strong> บนอุปกรณ์มือถือลูกค้า<br />
+                    2. กดปุ่ม <strong>Scan QR</strong> แล้วสแกนสัญลักษณ์ด้านบนนี้<br />
+                    3. แอปจะส่งข้อมูลสเปกเครื่องเพื่อลงทะเบียนสร้างเครื่องใหม่ในฐานข้อมูลให้ทันที!
+                  </div>
+                </>
+              )}
 
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
@@ -956,6 +1095,10 @@ function StandaloneEnrollModal({ device, onClose, onSave }: { device: Device; on
   const [enrollData, setEnrollData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [dpcConnected, setDpcConnected] = useState(false);
+  // Device Owner method tabs: 'adb' | 'wizard'
+  const [doMethodTab, setDoMethodTab] = useState<'adb' | 'wizard'>('wizard');
+  const [provisioningQr, setProvisioningQr] = useState<{ payloadJson: string; checksumSha256: string; downloadUrl: string } | null>(null);
+  const [provisioningLoading, setProvisioningLoading] = useState(false);
 
   const handleEnroll = async () => {
     setLoading(true);
@@ -965,6 +1108,7 @@ function StandaloneEnrollModal({ device, onClose, onSave }: { device: Device; on
         pollingIntervalSeconds: pollingInterval,
         securityMode,
       });
+      enrollTimeRef.current = Date.now();
       setEnrollData({ ...res.data.enrollmentQr, securityMode });
       toast('ลงทะเบียนอุปกรณ์สำเร็จ! สแกน QR Code เพื่อเริ่มซิงค์', 'success');
     } catch (err: any) {
@@ -975,7 +1119,7 @@ function StandaloneEnrollModal({ device, onClose, onSave }: { device: Device; on
   };
 
   // Poll for device DPC connection after QR is shown
-  const enrollTimeRef = useRef(Date.now());
+  const enrollTimeRef = useRef(0);
   useEffect(() => {
     if (!enrollData || dpcConnected) return;
     const interval = setInterval(async () => {
@@ -986,10 +1130,9 @@ function StandaloneEnrollModal({ device, onClose, onSave }: { device: Device; on
         if (updated) {
           const lastSeen = updated.lastSeen ? new Date(updated.lastSeen).getTime() : 0;
           const updatedAt = updated.updatedAt ? new Date(updated.updatedAt).getTime() : 0;
-          // Device connected if lastSeen is recent (within 90s) OR device was updated after enrollment
-          const recentlyActive = lastSeen > Date.now() - 90000;
-          const updatedAfterEnroll = updatedAt > enrollTimeRef.current;
-          if (recentlyActive || updatedAfterEnroll) {
+          // device.lastSeen defaults to creation time. We must ensure it pinged AFTER we started enrolling.
+          // Add 2000ms buffer to account for server/client clock drift since the enroll API updates the device.
+          if (lastSeen > enrollTimeRef.current + 2000) {
             setDpcConnected(true);
             clearInterval(interval);
           }
@@ -1225,9 +1368,112 @@ function StandaloneEnrollModal({ device, onClose, onSave }: { device: Device; on
                     <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--purple-400)' }}>วิธีตั้งค่า Device Owner</span>
                     <span style={{ fontSize: '10px', fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Advanced</span>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '14px' }}>ต้องใช้คอมพิวเตอร์ + สาย USB ตั้งค่าครั้งเดียว ป้องกัน factory reset ได้ถาวร</div>
-                  
-                  {/* Prerequisites */}
+
+                  {/* ── Method Tabs ── */}
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setDoMethodTab('wizard')}
+                      style={{
+                        flex: 1, padding: '8px 12px', borderRadius: '8px', border: `1px solid ${doMethodTab === 'wizard' ? 'var(--purple-500)' : 'var(--border)'}`,
+                        background: doMethodTab === 'wizard' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                        color: doMethodTab === 'wizard' ? 'var(--purple-300)' : 'var(--text-muted)',
+                        cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                      }}
+                    >
+                      <QrCode size={14} /> Setup Wizard QR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDoMethodTab('adb')}
+                      style={{
+                        flex: 1, padding: '8px 12px', borderRadius: '8px', border: `1px solid ${doMethodTab === 'adb' ? 'var(--purple-500)' : 'var(--border)'}`,
+                        background: doMethodTab === 'adb' ? 'rgba(139,92,246,0.15)' : 'transparent',
+                        color: doMethodTab === 'adb' ? 'var(--purple-300)' : 'var(--text-muted)',
+                        cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                      }}
+                    >
+                      <Terminal size={14} /> ADB / USB
+                    </button>
+                  </div>
+
+                  {doMethodTab === 'wizard' ? (
+                    /* ── Setup Wizard QR Tab ── */
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: '1.6' }}>
+                        ✨ <strong style={{ color: 'var(--text-primary)' }}>ง่ายที่สุด — ไม่ต้องใช้ USB / ADB</strong><br />
+                        สแกน QR นี้ตอน Setup Wizard หลัง Factory Reset แอนดรอยด์จะติดตั้งแอปและตั้งค่า Device Owner ให้อัตโนมัติ
+                      </div>
+
+                      {/* Steps */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+                        {[
+                          { step: '1', title: 'Factory Reset เครื่อง', desc: 'ไปที่ <strong>Settings → System → Reset → Factory Reset</strong> หรือจาก Recovery Mode', color: '#ef4444' },
+                          { step: '2', title: 'กดหน้าจอ Welcome 6 ครั้ง', desc: 'บนหน้าจอ <strong>"Hi there" / "ยินดีต้อนรับ"</strong> ให้กดตรงกลางหน้าจอ <strong>6 ครั้งติดกัน</strong> → จะเปิด QR Scanner', color: '#a855f7' },
+                          { step: '3', title: 'สแกน QR Code ด้านล่าง', desc: 'ระบบจะดาวน์โหลดและติดตั้งแอป <strong>System Service</strong> พร้อมตั้งค่า Device Owner ให้อัตโนมัติ', color: '#22c55e' },
+                        ].map(item => (
+                          <div key={item.step} style={{ display: 'flex', gap: '10px', padding: '10px', background: 'rgba(0,0,0,0.15)', borderRadius: '6px' }}>
+                            <div style={{ minWidth: '24px', height: '24px', borderRadius: '50%', background: item.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>{item.step}</div>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: '12px', color: 'var(--text-primary)', marginBottom: '2px' }}>{item.title}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }} dangerouslySetInnerHTML={{ __html: item.desc }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Provisioning QR */}
+                      {!provisioningQr ? (
+                        <button
+                          type="button"
+                          disabled={provisioningLoading}
+                          onClick={async () => {
+                            setProvisioningLoading(true);
+                            try {
+                              const res = await api.get('/dpc/provisioning-qr');
+                              setProvisioningQr(res.data);
+                            } catch { toast('ไม่สามารถโหลด QR ได้', 'error'); }
+                            finally { setProvisioningLoading(false); }
+                          }}
+                          style={{
+                            width: '100%', padding: '10px', borderRadius: '8px',
+                            background: 'linear-gradient(135deg, var(--purple-600), var(--purple-500))',
+                            color: '#fff', border: 'none', cursor: 'pointer',
+                            fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                          }}
+                        >
+                          {provisioningLoading ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} />}
+                          {provisioningLoading ? 'กำลังสร้าง QR...' : 'สร้าง Setup Wizard QR'}
+                        </button>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ background: '#fff', padding: '12px', borderRadius: '12px', border: '2px solid rgba(139,92,246,0.4)' }}>
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(provisioningQr.payloadJson)}&margin=2`}
+                              alt="Setup Wizard Provisioning QR"
+                              style={{ width: '220px', height: '220px', display: 'block' }}
+                            />
+                          </div>
+                          <div style={{ width: '100%', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', padding: '10px', fontSize: '11px' }}>
+                            <div style={{ color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600 }}>SHA-256 Checksum (ตรวจสอบ APK):</div>
+                            <div style={{ fontFamily: 'monospace', fontSize: '10px', wordBreak: 'break-all', color: '#86efac' }}>{provisioningQr.checksumSha256}</div>
+                          </div>
+                          <div style={{ width: '100%', background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: '6px', padding: '10px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                            <strong style={{ color: '#eab308' }}>⚠️ หมายเหตุ:</strong> QR นี้จะหมดอายุถ้า APK ถูก rebuild — กด "สร้าง QR" ใหม่ทุกครั้งหลัง build APK ใหม่
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setProvisioningQr(null)}
+                            style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                          >
+                            สร้าง QR ใหม่
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* ── ADB / USB Tab ── */
+                    <div>
                   <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '6px', padding: '12px', marginBottom: '14px' }}>
                     <div style={{ fontWeight: 600, fontSize: '12px', color: 'var(--red-400)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}><AlertTriangle size={14} /> สิ่งที่ต้องเตรียม</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -1290,6 +1536,8 @@ function StandaloneEnrollModal({ device, onClose, onSave }: { device: Device; on
                       ))}
                     </div>
                   </div>
+                  </div>
+                )}
                 </div>
               ) : (
                 /* ── Device Admin Setup Guide ─────────────────────────────── */
@@ -1335,6 +1583,190 @@ function StandaloneEnrollModal({ device, onClose, onSave }: { device: Device; on
   );
 }
 
+/* ── Danger Zone Modal ─────────────────────────────────────────────── */
+function DangerZoneModal({ device, onClose, onAction }: { device: Device; onClose: () => void; onAction: () => void }) {
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const executeAction = async (action: string, commandType: string, confirmMsg: string) => {
+    if (!confirm(confirmMsg)) return;
+    setLoading(action);
+    try {
+      await api.post('/admin/commands/queue', { deviceId: device._id, commandType });
+      toast(`Command queued for ${device.name}. Will execute on next poll (≤30s).`, 'success');
+      onAction();
+    } catch (err: any) {
+      toast(err.response?.data?.message || 'Failed to send command', 'error');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+        <div className="modal-header">
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle size={20} style={{ color: 'var(--red-400)' }} />
+            Danger Zone
+          </h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+            These actions are irreversible. Be careful!
+          </p>
+
+          {/* Remove MDM */}
+          <div style={{ 
+            background: 'var(--surface)', 
+            border: '1px solid var(--border)', 
+            borderRadius: '8px', 
+            padding: '14px',
+            marginBottom: '10px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ShieldOff size={16} style={{ color: 'var(--yellow-400)' }} />
+                  Remove MDM
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  {device.securityMode === 'device-owner' 
+                    ? 'Remove Device Owner status. App can be uninstalled.'
+                    : 'Remove Device Admin. App can be uninstalled.'}
+                </div>
+              </div>
+              <button 
+                className="btn btn-sm" 
+                style={{ background: 'var(--yellow-400)', color: '#000', fontWeight: 600 }}
+                disabled={loading === 'unenroll'}
+                onClick={() => executeAction('unenroll', 'UNENROLL', `Remove MDM from "${device.name}"?\n\n${device.securityMode === 'device-owner' ? 'Device will lose Device Owner status.' : 'Device Admin will be removed.'}`)}
+              >
+                {loading === 'unenroll' ? <Loader2 size={14} className="spin" /> : 'Remove'}
+              </button>
+            </div>
+          </div>
+
+          {/* Factory Reset - only for Device Owner */}
+          {device.securityMode === 'device-owner' && (
+          <div style={{ 
+            background: 'var(--surface)', 
+            border: '1px solid rgba(239,68,68,0.3)', 
+            borderRadius: '8px', 
+            padding: '14px',
+            marginBottom: '10px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Trash2 size={16} style={{ color: 'var(--red-400)' }} />
+                  Factory Reset
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Erase ALL data. Cannot be undone!
+                </div>
+              </div>
+              <button 
+                className="btn btn-sm btn-danger"
+                disabled={loading === 'wipe'}
+                onClick={() => executeAction('wipe', 'WIPE', `⚠️ FACTORY RESET "${device.name}"?\n\nThis will ERASE ALL DATA on the device.\nThis cannot be undone!`)}
+              >
+                {loading === 'wipe' ? <Loader2 size={14} className="spin" /> : 'Wipe'}
+              </button>
+            </div>
+          </div>
+          )}
+
+          {/* Remove FRP - only for Device Owner */}
+          {device.securityMode === 'device-owner' && (
+            <div style={{ 
+              background: 'var(--surface)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '8px', 
+              padding: '14px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Key size={16} style={{ color: 'var(--purple-400)' }} />
+                    Remove FRP
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Remove Factory Reset Protection.
+                  </div>
+                </div>
+                <button 
+                  className="btn btn-sm btn-secondary"
+                  disabled={loading === 'frp'}
+                  onClick={async () => {
+                    if (!confirm(`Remove FRP from "${device.name}"?`)) return;
+                    setLoading('frp');
+                    try {
+                      const res = await api.post(`/adb-bridge/remove-factory-reset-protection/${device._id}`);
+                      if (res.data.success) {
+                        toast('FRP removed successfully', 'success');
+                        onAction();
+                      } else {
+                        toast(`Failed: ${res.data.message}`, 'error');
+                      }
+                    } catch (err: any) {
+                      toast(err.response?.data?.message || 'Failed', 'error');
+                    } finally {
+                      setLoading(null);
+                    }
+                  }}
+                >
+                  {loading === 'frp' ? <Loader2 size={14} className="spin" /> : 'Remove'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Reset Status - for devices that stopped polling (factory reset, etc.) */}
+          <div style={{ 
+            background: 'var(--surface)', 
+            border: '1px solid var(--border)', 
+            borderRadius: '8px', 
+            padding: '14px',
+            marginTop: '10px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <RefreshCw size={16} style={{ color: 'var(--blue-400)' }} />
+                  Reset Status
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  For factory reset or lost devices. Sets status to available.
+                </div>
+              </div>
+              <button 
+                className="btn btn-sm btn-secondary"
+                disabled={loading === 'reset'}
+                onClick={async () => {
+                  if (!confirm(`Reset status for "${device.name}"?\n\nThis will set the device to available and clear MDM enrollment.`)) return;
+                  setLoading('reset');
+                  try {
+                    await api.post(`/devices/${device._id}/reset-status`);
+                    toast('Device status reset to available', 'success');
+                    onAction();
+                  } catch (err: any) {
+                    toast(err.response?.data?.message || 'Failed to reset status', 'error');
+                  } finally {
+                    setLoading(null);
+                  }
+                }}
+              >
+                {loading === 'reset' ? <Loader2 size={14} className="spin" /> : 'Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main Dashboard Fleet View ─────────────────────────────────────── */
 export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -1345,6 +1777,7 @@ export default function DevicesPage() {
   const [restrictionsModal, setRestrictionsModal] = useState<{ open: boolean; device: Device | null }>({ open: false, device: null });
   const [standaloneEnrollModal, setStandaloneEnrollModal] = useState<{ open: boolean; device: Device | null }>({ open: false, device: null });
   const [globalRegisterModalOpen, setGlobalRegisterModalOpen] = useState(false);
+  const [dangerZoneModal, setDangerZoneModal] = useState<{ open: boolean; device: Device | null }>({ open: false, device: null });
   const [configureDevice, setConfigureDevice] = useState<Device | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -1374,6 +1807,60 @@ export default function DevicesPage() {
   useEffect(() => {
     load();
   }, [platformFilter, statusFilter]);
+
+  // WebSocket connection for real-time device updates
+  useEffect(() => {
+    let socket: any = null;
+    
+    const connectWebSocket = async () => {
+      try {
+        const { io } = await import('socket.io-client');
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || apiUrl.replace(/\/api\/?$/, '')).replace(/\/$/, '');
+        
+        socket = io(`${backendUrl}/admin`, {
+          transports: ['websocket', 'polling'],
+        });
+
+        socket.on('connect', () => {
+          console.log('Connected to admin WebSocket');
+        });
+
+        socket.on('device:update', (updatedDevice: any) => {
+          setDevices(prevDevices => {
+            return prevDevices.map(d => {
+              if (d._id === updatedDevice._id) {
+                return { ...d, ...updatedDevice };
+              }
+              return d;
+            });
+          });
+        });
+
+        socket.on('devices:refresh', () => {
+          load();
+        });
+
+        socket.on('disconnect', () => {
+          console.log('Disconnected from admin WebSocket');
+        });
+
+        socket.on('connect_error', (err: Error) => {
+          console.error('Admin WebSocket connection error:', err.message);
+        });
+      } catch (err) {
+        console.error('WebSocket connection failed:', err);
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, []);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -1488,6 +1975,7 @@ export default function DevicesPage() {
     rented: 'blue',
     locked: 'red',
     maintenance: 'gray',
+    returned: 'gray',
   };
 
   return (
@@ -1561,6 +2049,7 @@ export default function DevicesPage() {
             <button className={`filter-chip ${statusFilter === 'available' ? 'active' : ''}`} onClick={() => setStatusFilter('available')}>Available</button>
             <button className={`filter-chip ${statusFilter === 'rented' ? 'active' : ''}`} onClick={() => setStatusFilter('rented')}>Rented</button>
             <button className={`filter-chip ${statusFilter === 'locked' ? 'active' : ''}`} onClick={() => setStatusFilter('locked')}>Locked</button>
+            <button className={`filter-chip ${statusFilter === 'returned' ? 'active' : ''}`} onClick={() => setStatusFilter('returned')}>Returned</button>
           </div>
         </div>
 
@@ -1586,10 +2075,11 @@ export default function DevicesPage() {
                 const activeRental = rentals.find(r => r.device?._id === d._id && r.status === 'active');
                 const rentingCustomerName = activeRental?.customer?.name;
 
+                const isReturned = d.status === 'returned';
                 return (
-                  <tr key={d._id}>
+                  <tr key={d._id} style={isReturned ? { opacity: 0.5 } : undefined}>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{d.name}</div>
+                      <div style={{ fontWeight: 600, textDecoration: isReturned ? 'line-through' : undefined }}>{d.name}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{d.brand} {d.model} • {d.storageGB}GB</div>
                       {rentingCustomerName && (
                         <div style={{
@@ -1690,12 +2180,19 @@ export default function DevicesPage() {
                         )}
                         
                         {/* More actions dropdown */}
-                        <div className="dropdown" style={{ position: 'relative' }}>
+                        <div className="dropdown">
                           <button 
                             className="btn btn-secondary btn-sm"
                             onClick={(e) => {
-                              const dropdown = e.currentTarget.nextElementSibling as HTMLElement;
-                              dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+                              // Close all other dropdowns first
+                              document.querySelectorAll('.dropdown-menu').forEach(m => (m as HTMLElement).style.display = 'none');
+                              const btn = e.currentTarget;
+                              const menu = btn.nextElementSibling as HTMLElement;
+                              const rect = btn.getBoundingClientRect();
+                              menu.style.display = 'block';
+                              menu.style.position = 'fixed';
+                              menu.style.top = `${rect.bottom + 4}px`;
+                              menu.style.right = `${window.innerWidth - rect.right}px`;
                             }}
                             style={{ padding: '4px 8px', display: 'flex', alignItems: 'center' }}
                           >
@@ -1703,16 +2200,14 @@ export default function DevicesPage() {
                           </button>
                           <div className="dropdown-menu" style={{
                             display: 'none',
-                            position: 'absolute',
-                            right: 0,
-                            top: '100%',
+                            position: 'fixed',
                             background: 'var(--surface)',
                             border: '1px solid var(--border)',
                             borderRadius: '8px',
                             padding: '4px',
                             minWidth: '180px',
-                            zIndex: 100,
-                            boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                            zIndex: 9999,
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
                           }}>
                             {/* iOS Screen Time */}
                             {d.platform === 'ios' && d.appleMdmUdid && (
@@ -1737,29 +2232,67 @@ export default function DevicesPage() {
                               </button>
                             )}
 
-                            {/* Standalone DPC Actions */}
+                            {/* ── Danger Zone: Standalone devices ── */}
                             {d.platform === 'android' && d.managementTrack === 'standalone' && d.standaloneDeviceId && (
-                              <button className="dropdown-item" style={{ color: 'var(--red-400)' }} onClick={async () => {
+                              <button className="dropdown-item" style={{ color: 'var(--red-400)' }} onClick={() => {
                                 document.querySelectorAll('.dropdown-menu').forEach(m => (m as HTMLElement).style.display = 'none');
-                                if (!confirm(`Unenroll DPC from "${d.name}"?\n\nApp will close and can be uninstalled.`)) return;
-                                try {
-                                  await api.post('/admin/commands/queue', { deviceId: d._id, commandType: 'UNENROLL' });
-                                  toast(`Unenroll command sent to ${d.name}`, 'success');
-                                  load();
-                                } catch (err: any) {
-                                  toast(err.response?.data?.message || 'Failed to send command', 'error');
-                                }
+                                setDangerZoneModal({ open: true, device: d });
                               }}>
-                                <Trash2 size={14} />
-                                Unenroll DPC
+                                <AlertTriangle size={14} />
+                                Danger Zone...
                               </button>
                             )}
+
 
                             {/* Enroll/Re-enroll DPC */}
                             {d.platform === 'android' && (
                               <button className="dropdown-item" onClick={() => { setStandaloneEnrollModal({ open: true, device: { ...d, managementTrack: 'standalone' } }); document.querySelectorAll('.dropdown-menu').forEach(m => (m as HTMLElement).style.display = 'none'); }}>
                                 <RefreshCw size={14} />
                                 {d.standaloneDeviceId ? 'Re-Enroll DPC' : 'Enroll DPC'}
+                              </button>
+                            )}
+
+                            {/* Remove Factory Reset Protection (Device Owner only) */}
+                            {d.securityMode === 'device-owner' && d.managementTrack === 'standalone' && (
+                              <button className="dropdown-item" style={{ color: 'var(--red-400)' }} onClick={async () => {
+                                document.querySelectorAll('.dropdown-menu').forEach(m => (m as HTMLElement).style.display = 'none');
+                                if (!confirm(`ลบ Factory Reset Protection จาก "${d.name}"?\n\nเครื่องจะไม่ป้องกัน Factory Reset อีกต่อไป แต่ยังอยู่ในโหมด Device Owner`)) return;
+                                try {
+                                  const res = await api.post(`/adb-bridge/remove-factory-reset-protection/${d._id}`);
+                                  if (res.data.success) {
+                                    toast('ลบ Factory Reset Protection สำเร็จ', 'success');
+                                    load();
+                                  } else {
+                                    toast(`ไม่สำเร็จ: ${res.data.message}`, 'error');
+                                  }
+                                } catch (err: any) {
+                                  toast(err.response?.data?.message || 'ADB Bridge ไม่เชื่อมต่อ', 'error');
+                                }
+                              }}>
+                                <ShieldOff size={14} />
+                                ลบ Factory Reset Protection
+                              </button>
+                            )}
+
+                            {/* Remove Device Owner (only for Device Owner devices) */}
+                            {d.securityMode === 'device-owner' && d.managementTrack === 'standalone' && (
+                              <button className="dropdown-item" style={{ color: 'var(--purple-400)' }} onClick={async () => {
+                                document.querySelectorAll('.dropdown-menu').forEach(m => (m as HTMLElement).style.display = 'none');
+                                if (!confirm(`Remove Device Owner from "${d.name}"? Device will fall back to Device Admin mode.`)) return;
+                                try {
+                                  const res = await api.post(`/adb-bridge/deactivate-device-owner/${d._id}`);
+                                  if (res.data.success) {
+                                    toast('Device Owner removed. Device is now Device Admin.', 'success');
+                                    load();
+                                  } else {
+                                    toast(`Failed: ${res.data.message}`, 'error');
+                                  }
+                                } catch (err: any) {
+                                  toast(err.response?.data?.message || 'ADB Bridge not connected', 'error');
+                                }
+                              }}>
+                                <Shield size={14} />
+                                Remove Device Owner
                               </button>
                             )}
 
@@ -1808,15 +2341,24 @@ export default function DevicesPage() {
         <GlobalRegisterModal
           initialDeviceCount={devices.length}
           onClose={() => { setGlobalRegisterModalOpen(false); load(); }}
-          onDeviceRegistered={(dev) => { setConfigureDevice(dev); }}
+          onDeviceRegistered={(dev) => { setConfigureDevice({ ...dev, _fromSetupWizard: true } as any); }}
         />
       )}
 
       {configureDevice && (
         <ConfigureModal
           device={configureDevice}
+          isDeviceOwner={!!(configureDevice as any)._fromSetupWizard}
           onClose={() => setConfigureDevice(null)}
           onConfigured={() => { setConfigureDevice(null); load(); }}
+        />
+      )}
+
+      {dangerZoneModal.open && dangerZoneModal.device && (
+        <DangerZoneModal
+          device={dangerZoneModal.device}
+          onClose={() => setDangerZoneModal({ open: false, device: null })}
+          onAction={() => { setDangerZoneModal({ open: false, device: null }); load(); }}
         />
       )}
     </AppLayout>

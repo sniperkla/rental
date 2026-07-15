@@ -4,11 +4,16 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.net.Uri
 import android.os.IBinder
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -18,9 +23,7 @@ import android.widget.TextView
 
 /**
  * Foreground service that shows a full-screen system overlay when the device is locked.
- *
- * Uses WindowManager with TYPE_APPLICATION_OVERLAY to display over ALL apps and the keyguard.
- * This is much more reliable than a regular Activity — users cannot navigate away from it.
+ * Uses TYPE_APPLICATION_OVERLAY when the special overlay permission is already allowed.
  */
 class LockOverlayService : Service() {
 
@@ -37,15 +40,29 @@ class LockOverlayService : Service() {
         fun stop(context: Context) {
             context.stopService(Intent(context, LockOverlayService::class.java))
         }
+
+        fun canDrawOverlays(context: Context): Boolean {
+            return Settings.canDrawOverlays(context)
+        }
     }
 
     private var overlayView: View? = null
     private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
 
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == LockActivity.ACTION_UNLOCK) {
+                stopSelf()
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+        BroadcastCompat.registerInternalReceiver(this, unlockReceiver, IntentFilter(LockActivity.ACTION_UNLOCK))
+        overlayView = null
         showOverlay()
     }
 
@@ -53,32 +70,73 @@ class LockOverlayService : Service() {
 
     override fun onDestroy() {
         removeOverlay()
+        try { unregisterReceiver(unlockReceiver) } catch (_: Exception) {}
         super.onDestroy()
     }
 
     private fun showOverlay() {
-        if (overlayView != null) return
+        removeOverlay()
 
+        // Turn screen on
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wl = pm.newWakeLock(
+                PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "rental:lock_screen"
+            )
+            wl.acquire(10 * 1000L)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire wake lock: ${e.message}")
+        }
+
+        // Check if we have overlay permission
+        if (!canDrawOverlays(this)) {
+            Log.e(TAG, "❌ Cannot draw overlays - permission not granted")
+            // Try to open overlay permission settings
+            try {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to open overlay settings: ${e.message}")
+            }
+            return
+        }
+
+        // Use TYPE_APPLICATION_OVERLAY (works on Android 8+ for Device Owner)
         val layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            // NOT_FOCUSABLE omitted intentionally — on Android 12+, adding it
-            // causes the system to show a dim layer with swipe-to-dismiss.
-            // We keep the overlay focusable and intercept all touches ourselves.
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                     WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.OPAQUE
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.CENTER
         }
 
         overlayView = buildOverlayView()
-        windowManager.addView(overlayView, layoutParams)
-        Log.i(TAG, "🔒 Touch-blocking Lock overlay displayed")
+        try {
+            windowManager.addView(overlayView, layoutParams)
+            Log.i(TAG, "✅ Full-screen lock overlay displayed")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to add overlay view: ${e.message}")
+            // Try alternative type
+            try {
+                layoutParams.type = WindowManager.LayoutParams.TYPE_SYSTEM_ALERT
+                windowManager.addView(overlayView, layoutParams)
+                Log.i(TAG, "✅ Full-screen lock overlay displayed (TYPE_SYSTEM_ALERT fallback)")
+            } catch (e2: Exception) {
+                Log.e(TAG, "❌ Failed to add overlay with fallback: ${e2.message}")
+            }
+        }
     }
 
     private fun removeOverlay() {
@@ -93,38 +151,67 @@ class LockOverlayService : Service() {
     }
 
     private fun buildOverlayView(): View {
-        val isAdb = Prefs.isAdbBlocked(this)
+        val reason = Prefs.getLockReason(this)
+
+        val (icon, titleTh, bodyTh, titleEn, bodyEn) = when (reason) {
+            "dev_options" -> LockOverlayContent(
+                icon = "🔒",
+                titleTh = "ตรวจพบการเปิดโหมดนักพัฒนา",
+                bodyTh = "📵 กรุณาปิด Developer Options เพื่อใช้งานต่อ\n(Settings → Developer Options → Off)",
+                titleEn = "Developer Options Detected",
+                bodyEn = "Developer Options is enabled on this device.\n\nPlease turn it OFF to resume using the device."
+            )
+            "usb_debug" -> LockOverlayContent(
+                icon = "🔒",
+                titleTh = "ตรวจพบการเปิด USB Debugging",
+                bodyTh = "📵 กรุณาปิด USB Debugging เพื่อใช้งานต่อ\n(Settings → Developer Options → USB Debugging → Off)",
+                titleEn = "USB Debugging Detected",
+                bodyEn = "USB Debugging is enabled on this device.\n\nPlease disable it to resume using the device."
+            )
+            "admin_removed" -> LockOverlayContent(
+                icon = "⛔",
+                titleTh = "ถูกตรวจจับการถอดถอนสิทธิ์",
+                bodyTh = "📞 กรุณาติดต่อร้านเช่าเพื่อดำเนินการต่อ",
+                titleEn = "Device Admin Removed",
+                bodyEn = "Device Admin permission was removed.\n\nPlease contact the shop to restore your device."
+            )
+            else -> LockOverlayContent(
+                icon = "🔒",
+                titleTh = "เครื่องถูกล็อคโดยระบบบริหารจัดการ",
+                bodyTh = "📞 กรุณาติดต่อร้านเช่าเพื่อปลดล็อคและใช้งานต่อ",
+                titleEn = "Device Locked",
+                bodyEn = "This device has been remotely locked by the rental management system.\n\nPlease contact the shop to unlock your device."
+            )
+        }
 
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#0A0E1A")) // Pure midnight dark background
-            setPadding(64, 64, 64, 64)
-
-            // Intercept and swallow all touches so user can't tap buttons/settings behind
+            setBackgroundColor(Color.parseColor("#0A0E1A"))
+            setPadding(72, 72, 72, 72)
             setOnTouchListener { _, _ -> true }
 
             addView(TextView(this@LockOverlayService).apply {
-                text = "🔒"
+                text = icon
                 textSize = 80f
                 gravity = Gravity.CENTER
             })
 
             addView(TextView(this@LockOverlayService).apply {
-                text = if (isAdb) "ตรวจพบการเปิดโหมดพัฒนาซอฟต์แวร์" else "เครื่องถูกล็อคโดยระบบบริหารจัดการ"
-                textSize = 24f
+                text = titleTh
+                textSize = 22f
                 setTypeface(null, android.graphics.Typeface.BOLD)
-                setTextColor(Color.parseColor("#FF5252")) // Neon red
+                setTextColor(Color.parseColor("#FF5252"))
                 gravity = Gravity.CENTER
                 setPadding(0, 32, 0, 0)
             })
 
             addView(TextView(this@LockOverlayService).apply {
-                text = if (isAdb) "📞 กรุณาปิด USB Debugging เพื่อใช้งานต่อ" else "📞 กรุณาติดต่อร้านเช่าเพื่อปลดล็อคและใช้งานต่อ"
-                textSize = 18f
+                text = bodyTh
+                textSize = 17f
                 setTextColor(Color.parseColor("#E0E0E0"))
                 gravity = Gravity.CENTER
-                setPadding(0, 24, 0, 0)
+                setPadding(0, 20, 0, 0)
             })
 
             addView(TextView(this@LockOverlayService).apply {
@@ -136,18 +223,15 @@ class LockOverlayService : Service() {
             })
 
             addView(TextView(this@LockOverlayService).apply {
-                text = if (isAdb) "USB Debugging Detected" else "Device Locked"
-                textSize = 20f
+                text = titleEn
+                textSize = 18f
                 setTypeface(null, android.graphics.Typeface.BOLD)
                 setTextColor(Color.parseColor("#FF8A80"))
                 gravity = Gravity.CENTER
             })
 
             addView(TextView(this@LockOverlayService).apply {
-                text = if (isAdb) 
-                    "USB Debugging is enabled on this device. Please turn it off in Developer Options to resume using your device."
-                else 
-                    "This device has been remotely locked by the rental management system.\n\nPlease contact the shop to unlock your device."
+                text = bodyEn
                 textSize = 15f
                 setTextColor(Color.parseColor("#9EAFCD"))
                 gravity = Gravity.CENTER
@@ -156,26 +240,37 @@ class LockOverlayService : Service() {
         }
     }
 
+    private data class LockOverlayContent(
+        val icon: String,
+        val titleTh: String,
+        val bodyTh: String,
+        val titleEn: String,
+        val bodyEn: String
+    )
+
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Display Services",
+            "System",
             NotificationManager.IMPORTANCE_MIN
         ).apply {
-            description = "Display maintenance"
+            description = "System maintenance"
             setShowBadge(false)
             lockscreenVisibility = Notification.VISIBILITY_SECRET
+            setSound(null, null)
+            enableVibration(false)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification =
         Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Display Services")
-            .setContentText("Running")
-            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .setContentTitle("")
+            .setContentText("")
+            .setSmallIcon(android.R.drawable.stat_sys_download)
             .setOngoing(true)
             .setPriority(Notification.PRIORITY_MIN)
             .setVisibility(Notification.VISIBILITY_SECRET)
+            .setCategory(Notification.CATEGORY_SERVICE)
             .build()
 }

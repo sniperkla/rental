@@ -47,4 +47,10 @@ export class DevicesController {
   configure(@Param('id') id: string, @Body() dto: ConfigureDeviceDto) {
     return this.svc.configure(id, dto);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/reset-status')
+  resetStatus(@Param('id') id: string) {
+    return this.svc.resetStatus(id);
+  }
 }

@@ -88,7 +88,7 @@ export class RentalsService {
       { new: true },
     );
     if (!rental) throw new NotFoundException('Rental not found');
-    await this.deviceModel.findByIdAndUpdate(rental.device, { status: DeviceStatus.AVAILABLE });
+    await this.deviceModel.findByIdAndUpdate(rental.device, { status: DeviceStatus.RETURNED });
     return rental;
   }
 }

@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:2:1-99:12
-INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:2:1-99:12
-INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:2:1-99:12
-INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:2:1-99:12
+ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:2:1-103:12
+INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:2:1-103:12
+INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:2:1-103:12
+INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:2:1-103:12
 MERGED from [com.google.android.material:material:1.11.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/250833e7b57c4e6416177d73282bd0ac/transformed/material-1.11.0/AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] /Users/katanyoo/.gradle/caches/9.3.0/transforms/a1c6d2216630c5e51a2d11113deb1036/transformed/constraintlayout-2.1.4/AndroidManifest.xml:2:1-11:12
 MERGED from [androidx.appcompat:appcompat-resources:1.6.1] /Users/katanyoo/.gradle/caches/9.3.0/transforms/4e4e94317d8b4eb62bff9a821c8b68aa/transformed/appcompat-resources-1.6.1/AndroidManifest.xml:17:1-22:12
@@ -113,8 +113,8 @@ ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManife
 	android:name
 		ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:31:22-80
 application
-ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:33:5-97:19
-INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:33:5-97:19
+ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:33:5-101:19
+INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:33:5-101:19
 MERGED from [com.google.android.material:material:1.11.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/250833e7b57c4e6416177d73282bd0ac/transformed/material-1.11.0/AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.11.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/250833e7b57c4e6416177d73282bd0ac/transformed/material-1.11.0/AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] /Users/katanyoo/.gradle/caches/9.3.0/transforms/a1c6d2216630c5e51a2d11113deb1036/transformed/constraintlayout-2.1.4/AndroidManifest.xml:9:5-20
@@ -226,13 +226,19 @@ ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManife
 	android:name
 		ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:87:13-46
 service#com.rental.dpc.LockOverlayService
-ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:92:9-95:58
+ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:92:9-99:19
 	android:exported
 		ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:94:13-37
 	android:foregroundServiceType
 		ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:95:13-55
 	android:name
 		ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:93:13-47
+property#android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE
+ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:96:13-98:52
+	android:value
+		ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:98:17-49
+	android:name
+		ADDED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:97:17-76
 uses-sdk
 INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml

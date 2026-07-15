@@ -13,8 +13,10 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.security.MessageDigest
 
 /**
  * Full-screen kiosk lock activity.
@@ -38,10 +40,9 @@ class LockActivity : Activity() {
             val intent = Intent(context, LockActivity::class.java).apply {
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_NO_HISTORY or
                     Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                    Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
                 )
             }
             context.startActivity(intent)
@@ -60,7 +61,18 @@ class LockActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applyWindowFlags()
+        buildUI()
+        BroadcastCompat.registerInternalReceiver(this, unlockReceiver, IntentFilter(ACTION_UNLOCK))
+    }
 
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        buildUI()
+    }
+
+    private fun applyWindowFlags() {
         // Show over the keyguard/lock screen
         @Suppress("DEPRECATION")
         window.addFlags(
@@ -86,10 +98,6 @@ class LockActivity : Activity() {
             android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
             android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
         )
-
-        buildUI()
-
-        registerReceiver(unlockReceiver, IntentFilter(ACTION_UNLOCK))
     }
 
     private fun buildUI() {
@@ -184,7 +192,119 @@ class LockActivity : Activity() {
             setPadding(0, 12, 0, 0)
         })
 
+        // ── Recovery Code Input (only visible after 2+ hours offline) ──────
+        if (shouldShowRecoveryCode()) {
+            root.addView(TextView(this).apply {
+                text = "──────────────────────"
+                textSize = 14f
+                setTextColor(Color.parseColor("#334460"))
+                gravity = Gravity.CENTER
+                setPadding(0, 32, 0, 24)
+            })
+
+            root.addView(TextView(this).apply {
+                text = "ปลดล็อคด้วยรหัสกู้คืน"
+                textSize = 14f
+                setTextColor(Color.parseColor("#F59E0B"))
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, 12)
+            })
+
+            val recoveryInput = EditText(this@LockActivity).apply {
+                hint = "กรอกรหัสกู้คืน 8 หลัก"
+                setTextColor(Color.WHITE)
+                setHintTextColor(Color.parseColor("#6B7280"))
+                setBackgroundColor(Color.parseColor("#1E293B"))
+                textSize = 18f
+                gravity = Gravity.CENTER
+                setPadding(24, 16, 24, 16)
+                maxLines = 1
+                inputType = android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or
+                        android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            }
+            root.addView(recoveryInput)
+
+            val statusText = TextView(this).apply {
+                text = ""
+                textSize = 12f
+                setTextColor(Color.parseColor("#EF4444"))
+                gravity = Gravity.CENTER
+                setPadding(0, 8, 0, 0)
+            }
+            root.addView(statusText)
+
+            root.addView(android.widget.Button(this).apply {
+                text = "ปลดล็อค"
+                textSize = 14f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#F59E0B"))
+                setPadding(32, 12, 32, 12)
+
+                setOnClickListener {
+                    val code = recoveryInput.text.toString().trim().uppercase()
+
+                    // Rate limiting: 3 failed attempts → 30s cooldown
+                    val attempts = Prefs.getRecoveryAttempts(this@LockActivity)
+                    val cooldownUntil = Prefs.getRecoveryCooldownUntil(this@LockActivity)
+                    val now = System.currentTimeMillis()
+
+                    if (now < cooldownUntil) {
+                        val remaining = ((cooldownUntil - now) / 1000).toInt()
+                        statusText.text = "ลองใหม่ใน ${remaining} วินาที"
+                        return@setOnClickListener
+                    }
+
+                    if (code.length != 8) {
+                        statusText.text = "รหัสต้องมี 8 ตัวอักษร"
+                        return@setOnClickListener
+                    }
+
+                    if (validateRecoveryCode(code)) {
+                        // Success — unlock device
+                        Prefs.setRecoveryAttempts(this@LockActivity, 0)
+                        Prefs.setDeviceLocked(this@LockActivity, false)
+                        Prefs.setLockReason(this@LockActivity, "")
+                        Prefs.setRecoveryUnlocked(this@LockActivity) // 24h cooldown
+                        sendBroadcast(Intent(ACTION_UNLOCK))
+                        finish()
+                    } else {
+                        // Failed — increment attempts
+                        val newAttempts = attempts + 1
+                        Prefs.setRecoveryAttempts(this@LockActivity, newAttempts)
+
+                        if (newAttempts >= 3) {
+                            Prefs.setRecoveryCooldownUntil(this@LockActivity, now + 30_000)
+                            Prefs.setRecoveryAttempts(this@LockActivity, 0)
+                            statusText.text = "ลองผิด 3 ครั้ง — รอ 30 วินาที"
+                        } else {
+                            statusText.text = "รหัสไม่ถูกต้อง (${newAttempts}/3)"
+                        }
+                    }
+                }
+            })
+        }
+
         setContentView(root)
+    }
+
+    /** Show recovery code input only when device has been offline for 2+ hours. */
+    private fun shouldShowRecoveryCode(): Boolean {
+        if (!Prefs.hasRecoveryCode(this)) return false
+        val offlineMs = Prefs.msSinceLastPoll(this)
+        return offlineMs >= 2 * 60 * 60 * 1000L // 2 hours
+    }
+
+    /** Validate recovery code against stored SHA-256 hash. */
+    private fun validateRecoveryCode(code: String): Boolean {
+        val storedHash = Prefs.getRecoveryCodeHash(this)
+        if (storedHash.isBlank()) return false
+        val inputHash = sha256(code)
+        return inputHash == storedHash
+    }
+
+    private fun sha256(input: String): String {
+        val bytes = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
     private data class LockContent(
@@ -218,31 +338,22 @@ class LockActivity : Activity() {
     }
 
     override fun onUserLeaveHint() {
-        // Home button pressed — relaunch ourselves after a short delay
-        handler.postDelayed({ start(this) }, 300)
+        // Home button pressed. LockOverlayService will block interaction.
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        // Re-apply immersive mode any time focus returns
         if (hasFocus) {
-            window.decorView.systemUiVisibility = (
-                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-            )
-        } else {
-            // Lost focus — bring ourselves back to front
-            handler.postDelayed({ start(this) }, 500)
+            applyWindowFlags()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyWindowFlags()
     }
 
     override fun onPause() {
         super.onPause()
-        // Re-launch after short delay in case something pushed us to the background
-        handler.postDelayed({ start(this) }, 400)
     }
 }

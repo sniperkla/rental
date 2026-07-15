@@ -72,7 +72,8 @@ export class DpcWebSocketGateway implements OnGatewayInit, OnGatewayConnection, 
   }
 
   handleDisconnect(client: Socket) {
-    const deviceId = client.handshake.headers['x-dpc-device-id'] as string;
+    const auth = (client.handshake.auth ?? {}) as Record<string, string>;
+    const deviceId = auth['X-DPC-Device-Id'] || client.handshake.headers['x-dpc-device-id'] as string;
     
     if (this.clients.has(deviceId)) {
       this.clients.delete(deviceId);

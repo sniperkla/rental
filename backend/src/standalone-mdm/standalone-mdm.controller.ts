@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Logger,
   Param,
   Post,
   Req,
@@ -12,6 +13,7 @@ import {
 import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DpcApiKeyGuard, DPC_DEVICE_KEY } from './dpc-api-key.guard';
 import {
@@ -29,6 +31,7 @@ import type { DeviceDocument } from '../schemas/device.schema';
 
 @Controller()
 export class StandaloneMdmController {
+  private readonly logger = new Logger(StandaloneMdmController.name);
   constructor(private readonly service: StandaloneMdmService) {}
 
   /**
@@ -149,6 +152,111 @@ scp rental-dpc.apk user@server:/home/ec2-user/rental/backend/uploads/dpc/rental-
         </html>
       `);
     }
+  }
+
+  /**
+   * GET /api/dpc/provisioning-qr
+   * PUBLIC endpoint — returns the Android Device Owner provisioning JSON payload.
+   *
+   * This JSON is encoded as a QR code and scanned during the Android Setup Wizard
+   * (tap the "Welcome" screen 6 times to trigger the provisioning flow).
+   *
+   * Android will:
+   *   1. Connect to Wi-Fi (if SSID/password provided)
+   *   2. Download the APK from PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION
+   *   3. Verify the APK checksum
+   *   4. Install the app silently
+   *   5. Set it as Device Owner automatically
+   *
+   * The PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM is the SHA-256 of the APK
+   * file encoded as base64url without padding — Android verifies this before installing.
+   */
+  @Get('dpc/provisioning-qr')
+  getProvisioningQr(@Req() req: Request) {
+    const dpcApkPath = path.join(getApkStorageDir().replace('/apks', '/dpc'), 'rental-dpc.apk');
+    const host = req.headers.host || 'localhost:3001';
+    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const downloadUrl = `${protocol}://${host}/api/dpc/download?download=true`;
+
+    // IMPORTANT: PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM must be the SHA-256 of the
+    // signing CERTIFICATE (DER-encoded), NOT the APK file. Android verifies the signing cert hash
+    // before installing the app during provisioning.
+    let checksum = '';
+    if (fs.existsSync(dpcApkPath)) {
+      try {
+        // 1. Try to read a pre-computed checksum file (useful for Docker deployments)
+        const checksumFilePath = `${dpcApkPath}.sha256`;
+        if (fs.existsSync(checksumFilePath)) {
+          checksum = fs.readFileSync(checksumFilePath, 'utf8').trim();
+          Logger.log(`Certificate checksum (from file): ${checksum}`, 'StandaloneMdmController');
+        }
+
+        // 2. Try apksigner if available (local development)
+        if (!checksum) {
+          const apksignerPaths = [
+            'apksigner', // if in PATH
+            '/Users/katanyoo/Library/Android/sdk/build-tools/36.0.0/apksigner',
+            '/Users/katanyoo/Library/Android/sdk/build-tools/35.0.0/apksigner',
+            '/Users/katanyoo/Library/Android/sdk/build-tools/34.0.0/apksigner',
+          ];
+          for (const p of apksignerPaths) {
+            try {
+              const { execSync } = require('child_process');
+              const output = execSync(`"${p}" verify --print-certs "${dpcApkPath}" 2>/dev/null`).toString();
+              const match = output.match(/certificate SHA-256 digest:\s+([0-9a-f]{64})/i);
+              if (match) {
+                const hexBytes = Buffer.from(match[1], 'hex');
+                checksum = hexBytes.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                Logger.log(`Certificate checksum (apksigner): ${checksum}`, 'StandaloneMdmController');
+                break;
+              }
+            } catch (e) {
+              // Ignore and try next path
+            }
+          }
+        }
+
+        // 3. Hardcoded fallback for the known debug keystore (temporary fix for server deployments)
+        if (!checksum) {
+          checksum = 'MG2n1dcSj_tjXLajb94DzPSccFoKtHGkTvEMGFbsPUk';
+          Logger.warn('apksigner not found — using hardcoded debug keystore checksum', 'StandaloneMdmController');
+        }
+      } catch (e) {
+        Logger.error(`Failed to compute checksum: ${e}`, 'StandaloneMdmController');
+      }
+    }
+
+    const payload = {
+      'android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME':
+        'com.rental.dpc/.DpcAdminReceiver',
+      'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION': downloadUrl,
+      ...(checksum
+        ? { 'android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM': checksum }
+        : {}),
+      'android.app.extra.PROVISIONING_SKIP_ENCRYPTION': false,
+      'android.app.extra.PROVISIONING_LOCALE': 'th_TH',
+      'android.app.extra.PROVISIONING_TIME_ZONE': 'Asia/Bangkok',
+    };
+
+    if (req.query.registrationToken) {
+      (payload as any)['android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE'] = {
+        registrationToken: req.query.registrationToken,
+        backendUrl: `${protocol}://${host}`,
+      };
+    }
+
+    return {
+      payload,
+      payloadJson: JSON.stringify(payload),
+      downloadUrl,
+      checksumSha256: checksum || '(APK not found — upload APK first)',
+      instructions: [
+        'Factory reset the phone first',
+        'On the Welcome screen, tap 6 times rapidly',
+        'The phone will open a QR scanner',
+        'Scan this QR — Android will download & install the app as Device Owner automatically',
+      ],
+    };
   }
 
   /**
@@ -276,5 +384,25 @@ export class DpcController {
     const device = (req as any)[DPC_DEVICE_KEY] as DeviceDocument;
     const { apkFileName } = await this.service.resolveApkCommand(commandId, device);
     return streamApk(apkFileName, res);
+  }
+
+  /**
+   * GET /api/dpc/status
+   * Returns the device's current configuration status.
+   * Used by the DPC app to check if admin has configured the device.
+   *
+   * Headers required:
+   *   X-DPC-Device-Id: <standaloneDeviceId>
+   *   X-DPC-Api-Key:   <rawApiKey>
+   */
+  @Get('status')
+  @UseGuards(DpcApiKeyGuard)
+  async getStatus(@Req() req: Request) {
+    const device = (req as any)[DPC_DEVICE_KEY] as DeviceDocument;
+    return {
+      configuredAt: (device as any).configuredAt ? (device as any).configuredAt.toISOString() : '',
+      securityMode: (device as any).securityMode || '',
+      status: device.status,
+    };
   }
 }

@@ -15,6 +15,7 @@ import { StandaloneConfig, StandaloneConfigDocument } from '../schemas/standalon
 import { AndroidMdmService } from '../android-mdm/android-mdm.service';
 import { AppleMdmService } from '../apple-mdm/apple-mdm.service';
 import { DevicesService } from '../devices/devices.service';
+import { AdminWebSocketGateway } from '../admin-websocket.gateway';
 
 import { IsString, IsOptional, IsNumber, IsArray, IsBoolean, IsEnum, IsObject } from 'class-validator';
 
@@ -102,6 +103,10 @@ export class SelfRegisterDto {
   @IsOptional()
   @IsString()
   imei?: string;
+
+  @IsOptional()
+  @IsString()
+  securityMode?: 'device-admin' | 'device-owner';
 }
 
 // ─── Service ───────────────────────────────────────────────────────────────
@@ -119,6 +124,7 @@ export class StandaloneMdmService {
     @InjectModel(StandaloneConfig.name) private configModel: Model<StandaloneConfigDocument>,
     private androidMdmService: AndroidMdmService,
     private appleMdmService: AppleMdmService,
+    private adminGateway: AdminWebSocketGateway,
   ) {}
 
   // ── Admin: Enrollment ───────────────────────────────────────────────────
@@ -219,11 +225,13 @@ export class StandaloneMdmService {
         serialNumber:             dto.androidId,
         imei:                     dto.imei || '',
         platform:                 DevicePlatform.ANDROID,
-        status:                   DeviceStatus.PENDING,
+        status:                   DeviceStatus.AVAILABLE,
         managementTrack:          'standalone',
         standaloneDeviceId,
         standaloneApiKeyHash:     hashedApiKey,
         standalonePollingInterval: pollingInterval,
+        securityMode:             dto.securityMode || 'device-admin',
+        configuredAt:             new Date(),
         dailyRate:                0,
         monthlyRate:              0,
       } as any);
@@ -231,19 +239,23 @@ export class StandaloneMdmService {
       if (!device) throw new NotFoundException('Failed to create device record');
 
     } else {
-      // --- Existing device: refresh API key, keep same standaloneDeviceId ---
-      this.logger.log(`🔄 Re-registration: ${device.name} (androidId=${dto.androidId}) — refreshing API key`);
+      // --- Existing device: generate NEW standaloneDeviceId (fresh start after factory reset) ---
+      const newStandaloneDeviceId = uuidv4();
+      this.logger.log(`🔄 Re-registration: ${device.name} (androidId=${dto.androidId}) — new deviceId=${newStandaloneDeviceId}`);
 
       device = await this.devicesService.model.findByIdAndUpdate(
         device._id,
         {
           managementTrack:      'standalone',
+          standaloneDeviceId:   newStandaloneDeviceId,
           standaloneApiKeyHash: hashedApiKey,
           standalonePollingInterval: pollingInterval,
           brand:  dto.brand,
           model:  dto.model,
           imei:   dto.imei || (device as any).imei || '',
-          status: DeviceStatus.PENDING,
+          status: DeviceStatus.AVAILABLE,
+          securityMode: dto.securityMode || (device as any).securityMode || 'device-admin',
+          configuredAt: new Date(),
         } as any,
         { new: true },
       );
@@ -453,8 +465,27 @@ export class StandaloneMdmService {
       },
     );
 
-    // Fetch pending commands
-    let pendingCommands = await this.getPendingCommands(device._id);
+    // If telemetry confirms Device Owner is active, promote status to AVAILABLE
+    if (
+      dto.telemetry &&
+      (dto.telemetry as any).is_device_owner === true &&
+      device.securityMode === 'device-owner' &&
+      device.status === DeviceStatus.PENDING
+    ) {
+      this.logger.log(`🛡️ Device Owner verified via telemetry for device: ${device.name}. Promoting status to AVAILABLE.`);
+      const updated = await this.devicesService.model.findByIdAndUpdate(
+        device._id,
+        { status: DeviceStatus.AVAILABLE },
+        { new: true },
+      );
+      this.adminGateway.broadcastDeviceUpdate(updated);
+    }
+
+    // Fetch pending commands (skip if device is not yet configured)
+    let pendingCommands: any[] = [];
+    if ((device as any).configuredAt) {
+      pendingCommands = await this.getPendingCommands(device._id);
+    }
 
     // Long-polling: if no commands are currently pending, hold the request open for up to 20s
     if (pendingCommands.length === 0) {
@@ -515,11 +546,22 @@ export class StandaloneMdmService {
       resultMessage: dto.message ?? (dto.success ? 'Success' : 'Failed'),
     });
 
-    // Reflect lock/unlock status on the device record
+    // Reflect lock/unlock/unenroll status on the device record
     if (command.commandType === MdmCommandType.LOCK && dto.success) {
-      await this.devicesService.model.findByIdAndUpdate(device._id, { status: DeviceStatus.LOCKED });
+      const updated = await this.devicesService.model.findByIdAndUpdate(device._id, { status: DeviceStatus.LOCKED }, { new: true });
+      this.adminGateway.broadcastDeviceUpdate(updated);
     } else if (command.commandType === MdmCommandType.UNLOCK && dto.success) {
-      await this.devicesService.model.findByIdAndUpdate(device._id, { status: DeviceStatus.RENTED });
+      const updated = await this.devicesService.model.findByIdAndUpdate(device._id, { status: DeviceStatus.RENTED }, { new: true });
+      this.adminGateway.broadcastDeviceUpdate(updated);
+    } else if (command.commandType === MdmCommandType.UNENROLL && dto.success) {
+      // Device has been unenrolled — clear standalone enrollment data
+      const updated = await this.devicesService.model.findByIdAndUpdate(device._id, {
+        $unset: { standaloneDeviceId: 1, standaloneApiKeyHash: 1, standalonePollingInterval: 1 },
+        status: DeviceStatus.AVAILABLE,
+        managementTrack: 'cloud',
+      }, { new: true });
+      this.adminGateway.broadcastDeviceUpdate(updated);
+      this.logger.log(`🔓 Device ${device.name} unenrolled — standalone data cleared`);
     }
 
     this.logger.log(`📬 DPC callback: ${dto.commandId} → ${newStatus} (device: ${device.name})`);

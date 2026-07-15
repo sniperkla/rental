@@ -33,10 +33,8 @@ class BootReceiver : BroadcastReceiver() {
             // 3. If device was locked before shutdown, restore lock state
             if (Prefs.isDeviceLocked(context)) {
                 Log.w("BootReceiver", "🔒 Device was locked — restoring LockActivity + overlay on boot")
-                LockActivity.start(context)
-                LockOverlayService.start(context)
 
-                // Re-lock the keyguard
+                // Re-lock the keyguard FIRST so LockActivity can show over it
                 try {
                     if (dpm.isAdminActive(admin)) {
                         dpm.lockNow()
@@ -44,6 +42,11 @@ class BootReceiver : BroadcastReceiver() {
                 } catch (e: Exception) {
                     Log.e("BootReceiver", "Failed to re-lock keyguard: ${e.message}")
                 }
+
+                if (LockOverlayService.canDrawOverlays(context)) {
+                    LockOverlayService.start(context)
+                }
+                LockActivity.start(context)
             }
         }
     }

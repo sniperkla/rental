@@ -64,94 +64,16 @@
         android:layout_marginBottom="24dp"
         android:visibility="visible" />
 
-    <!-- Mode Selection (shown after QR scan, before enrollment completes) -->
+    <!-- Waiting for Configuration (shown after QR scan, dynamically populated) -->
     <LinearLayout
         android:id="@+id/layoutModeSelect"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:visibility="gone">
+        android:visibility="gone" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="เลือกระดับความปลอดภัย"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="#FFFFFF"
-            android:layout_marginBottom="8dp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="เลือกก่อนมอบเครื่องให้ลูกค้า"
-            android:textSize="13sp"
-            android:textColor="#9EAFCD"
-            android:gravity="center"
-            android:layout_marginBottom="24dp" />
-
-        <!-- Device Admin Option -->
-        <LinearLayout
-            android:id="@+id/btnModeAdmin"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#121829"
-            android:padding="16dp"
-            android:layout_marginBottom="12dp"
-            android:clickable="true"
-            android:focusable="true">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="📱 Device Admin — ตั้งค่าง่าย"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="#FFFFFF"
-                android:layout_marginBottom="6dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="✅ ล็อค/ปลดล็อคเครื่อง\n✅ แสดงข้อความหน้าจอ\n❌ ลูกค้า factory reset หลุดได้"
-                android:textSize="12sp"
-                android:textColor="#7A8FA6"
-                android:lineSpacingExtra="4dp" />
-        </LinearLayout>
-
-        <!-- Device Owner Option -->
-        <LinearLayout
-            android:id="@+id/btnModeOwner"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#121829"
-            android:padding="16dp"
-            android:layout_marginBottom="24dp"
-            android:clickable="true"
-            android:focusable="true">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🛡️ Device Owner — ปลอดภัยสูงสุด"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="#FFFFFF"
-                android:layout_marginBottom="6dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="✅ ป้องกัน factory reset\n✅ ป้องกัน bootloader\n✅ ซ่อนแอปจากระบบ\n⚠️ ต้องรัน ADB จากคอมพิวเตอร์"
-                android:textSize="12sp"
-                android:textColor="#7A8FA6"
-                android:lineSpacingExtra="4dp" />
-        </LinearLayout>
-
-    </LinearLayout>
 
     <!-- Enrolled success message (hidden until enrolled) -->
     <LinearLayout

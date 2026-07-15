@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { Device, DeviceDocument, DeviceStatus } from '../schemas/device.schema';
 import { IsString, IsOptional, IsNumber, IsEnum, IsArray } from 'class-validator';
 import { DevicePlatform } from '../schemas/device.schema';
+import * as crypto from 'crypto';
 
 export class CreateDeviceDto {
   @IsString() name: string;
@@ -125,13 +126,23 @@ export class DevicesService {
 
     const update: any = {
       securityMode: dto.securityMode,
-      status: DeviceStatus.AVAILABLE,
+      status: dto.securityMode === 'device-owner' ? DeviceStatus.PENDING : DeviceStatus.AVAILABLE,
       configuredAt: new Date(),
     };
     if (dto.tags !== undefined) update.tags = dto.tags;
     if (dto.dailyRate !== undefined) update.dailyRate = dto.dailyRate;
     if (dto.monthlyRate !== undefined) update.monthlyRate = dto.monthlyRate;
     if (dto.notes !== undefined) update.notes = dto.notes;
+
+    // Generate recovery code for Device Owner mode
+    let recoveryCode: string | null = null;
+    if (dto.securityMode === 'device-owner') {
+      recoveryCode = this.generateRecoveryCode();
+      update.recoveryCodeHash = crypto
+        .createHash('sha256')
+        .update(recoveryCode)
+        .digest('hex');
+    }
 
     const doc = await this.model.findByIdAndUpdate(id, update, { new: true });
 
@@ -142,6 +153,39 @@ export class DevicesService {
       adbCommand: dto.securityMode === 'device-owner'
         ? 'adb shell dpm set-device-owner com.rental.dpc/.DpcAdminReceiver'
         : null,
+      recoveryCode, // shown once to admin, never stored in plain text
     };
+  }
+
+  async resetStatus(id: string) {
+    const device = await this.model.findById(id);
+    if (!device) throw new NotFoundException('Device not found');
+
+    // Clear standalone enrollment data and reset status
+    const update: any = {
+      status: DeviceStatus.AVAILABLE,
+      $unset: {
+        standaloneDeviceId: 1,
+        standaloneApiKeyHash: 1,
+        standalonePollingInterval: 1,
+        securityMode: 1,
+        configuredAt: 1,
+        recoveryCodeHash: 1,
+      }
+    };
+
+    const doc = await this.model.findByIdAndUpdate(id, update, { new: true });
+    return { message: 'Device status reset to available', device: doc };
+  }
+
+  private generateRecoveryCode(): string {
+    // 8-char alphanumeric (uppercase), ~47 bits of entropy
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 to avoid confusion
+    const bytes = crypto.randomBytes(8);
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars[bytes[i] % chars.length];
+    }
+    return code;
   }
 }

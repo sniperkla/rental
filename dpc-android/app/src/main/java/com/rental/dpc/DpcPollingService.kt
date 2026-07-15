@@ -66,6 +66,36 @@ class DpcPollingService : Service() {
         super.onDestroy()
     }
 
+    /**
+     * Called when device is removed from the backend (401/404).
+     * Clears all credentials, stops services, and brings user back to scan screen.
+     */
+    private fun handleDeviceRemoved() {
+        Log.w(TAG, "Device removed — clearing all state")
+
+        // Stop overlay service if running
+        try { LockOverlayService.stop(this) } catch (_: Exception) {}
+
+        // Dismiss lock activity if showing
+        sendBroadcast(android.content.Intent(LockActivity.ACTION_UNLOCK))
+
+        // Clear all stored credentials
+        Prefs.clear(this)
+
+        // Stop this polling service
+        DpcPollingService.stop(this)
+
+        // Launch MainActivity to show scan screen
+        val intent = android.content.Intent(this, MainActivity::class.java).apply {
+            addFlags(
+                android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+        }
+        startActivity(intent)
+    }
+
     // ─── Polling Loop ──────────────────────────────────────────────────────────
 
     private fun startPolling() {
@@ -108,47 +138,82 @@ class DpcPollingService : Service() {
             Prefs.setDeviceLocked(this, true)
             Prefs.setLockReason(this, "admin_removed")
             LockActivity.start(this)
+            if (LockOverlayService.canDrawOverlays(this)) {
+                LockOverlayService.start(this)
+            }
             return
         }
 
-        // 2. Developer Options / ADB check (only needed for Device Admin — Device Owner
-        //    blocks dev options at OS level via "no_debugging_features" restriction)
-        if (!dpm.isDeviceOwnerApp(packageName)) {
-            val isDevOptionsOn = android.provider.Settings.Global.getInt(
-                contentResolver,
-                android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
-                0
-            ) != 0
+        // 2. Developer Options / ADB check (for both Device Admin and Device Owner)
+        //    Even with DISALLOW_DEBUGGING_FEATURES, some devices still allow enabling Developer Options UI
+        val isDevOptionsOn = android.provider.Settings.Global.getInt(
+            contentResolver,
+            android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
+            0
+        ) != 0
 
-            val isAdbOn = android.provider.Settings.Global.getInt(
-                contentResolver,
-                android.provider.Settings.Global.ADB_ENABLED,
-                0
-            ) != 0
+        val isAdbOn = android.provider.Settings.Global.getInt(
+            contentResolver,
+            android.provider.Settings.Global.ADB_ENABLED,
+            0
+        ) != 0
 
-            val isViolation = isDevOptionsOn || isAdbOn
+        val isViolation = isDevOptionsOn || isAdbOn
+        val isAlreadyBlocked = Prefs.isAdbBlocked(this)
+        
+        Log.d(TAG, "🔍 Dev options check: devOptions=$isDevOptionsOn adb=$isAdbOn isViolation=$isViolation isAlreadyBlocked=$isAlreadyBlocked")
 
-            if (isViolation) {
-                if (!Prefs.isAdbBlocked(this)) {
-                    val reason = when {
-                        isAdbOn       -> "usb_debug"
-                        isDevOptionsOn -> "dev_options"
-                        else           -> "dev_options"
-                    }
-                    Log.w(TAG, "⚠️ Developer Options or ADB enabled (devOptions=$isDevOptionsOn adb=$isAdbOn)! Locking.")
+        if (isViolation) {
+            if (!isAlreadyBlocked) {
+                val reason = when {
+                    isAdbOn       -> "usb_debug"
+                    isDevOptionsOn -> "dev_options"
+                    else           -> "dev_options"
+                }
+                
+                // Check if warning has already been shown
+                val warningShown = Prefs.isDevOptionsWarningShown(this)
+                
+                if (!warningShown) {
+                    // Stage 1: Show warning notification (not full lock yet)
+                    Log.w(TAG, "⚠️ Developer Options detected — showing warning")
+                    Prefs.setDevOptionsWarningShown(this, true)
+                    showDevOptionsWarning(this@DpcPollingService)
+                } else {
+                    // Stage 2: Warning ignored — apply full lock
+                    Log.w(TAG, "⚠️ Developer Options still enabled after warning! Locking device.")
                     Prefs.setAdbBlocked(this, true)
                     Prefs.setDeviceLocked(this, true)
                     Prefs.setLockReason(this, reason)
+                    
+                    // For Device Owner: actively disable Developer Options
+                    if (dpm.isDeviceOwnerApp(packageName)) {
+                        try {
+                            dpm.setGlobalSetting(admin, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, "0")
+                            dpm.setGlobalSetting(admin, android.provider.Settings.Global.ADB_ENABLED, "0")
+                            Log.i(TAG, "✅ Developer Options and ADB disabled via setGlobalSetting (Device Owner)")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not disable Developer Options/ADB: ${e.message}")
+                        }
+                    }
+                    
                     LockActivity.start(this)
+                    if (LockOverlayService.canDrawOverlays(this)) {
+                        LockOverlayService.start(this)
+                    }
                 }
             } else {
-                if (Prefs.isAdbBlocked(this)) {
-                    Log.i(TAG, "✅ Developer Options disabled. Releasing dev-mode lock.")
-                    Prefs.setAdbBlocked(this, false)
-                    Prefs.setDeviceLocked(this, false)
-                    Prefs.setLockReason(this, "")
-                    sendBroadcast(android.content.Intent(LockActivity.ACTION_UNLOCK))
-                }
+                Log.d(TAG, "Device already blocked for dev options, skipping")
+            }
+        } else {
+            if (isAlreadyBlocked) {
+                Log.i(TAG, "✅ Developer Options disabled. Releasing dev-mode lock.")
+                Prefs.setAdbBlocked(this, false)
+                Prefs.setDeviceLocked(this, false)
+                Prefs.setLockReason(this, "")
+                Prefs.setDevOptionsWarningShown(this, false) // Reset warning flag
+                dismissDevOptionsWarning(this@DpcPollingService) // Dismiss warning notification
+                sendBroadcast(android.content.Intent(LockActivity.ACTION_UNLOCK))
             }
         }
     }
@@ -158,6 +223,13 @@ class DpcPollingService : Service() {
             Log.d(TAG, "Offline lock is disabled in settings")
             return
         }
+
+        // Skip auto-lock during recovery cooldown (24h after recovery unlock)
+        if (Prefs.isWithinRecoveryCooldown(this)) {
+            Log.d(TAG, "Within recovery cooldown — skipping auto-lock")
+            return
+        }
+
         val offlineMs = Prefs.msSinceLastPoll(this)
         val graceMs = Prefs.getOfflineGracePeriod(this)
         if (offlineMs >= graceMs) {
@@ -183,10 +255,14 @@ class DpcPollingService : Service() {
             return
         }
 
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+        val isDeviceOwner = dpm.isDeviceOwnerApp(packageName)
+
         // Build telemetry payload
         val telemetry = JSONObject().apply {
             put("battery_pct", getBatteryLevel())
             put("wifi_ssid", "unknown")
+            put("is_device_owner", isDeviceOwner)
         }
         val body = JSONObject().apply {
             put("telemetry", telemetry)
@@ -203,6 +279,12 @@ class DpcPollingService : Service() {
         val response = client.newCall(request).execute()
         if (!response.isSuccessful) {
             Log.e(TAG, "Poll failed: HTTP ${response.code}")
+
+            // Device deleted or unauthorized — clear credentials, go back to scan
+            if (response.code == 401 || response.code == 404) {
+                Log.w(TAG, "⚠️ Device removed or unauthorized — clearing enrollment")
+                handleDeviceRemoved()
+            }
             return
         }
 
@@ -261,6 +343,44 @@ class DpcPollingService : Service() {
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
+    private fun showDevOptionsWarning(context: Context) {
+        val channelId = "dev_options_warning"
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        val channel = android.app.NotificationChannel(
+            channelId,
+            "Security Warning",
+            android.app.NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Developer Options warning"
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            enableVibration(true)
+        }
+        nm.createNotificationChannel(channel)
+
+        val notification = android.app.Notification.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("⚠️ Developer Options Detected")
+            .setContentText("Please disable Developer Options immediately or the device will be locked!")
+            .setStyle(
+                android.app.Notification.BigTextStyle()
+                    .bigText("Developer Options or USB Debugging has been detected on this device.\n\n" +
+                            "Please go to Settings → Developer Options → Turn it OFF immediately.\n\n" +
+                            "If not disabled, the device will be LOCKED on the next check (within 30 seconds).")
+            )
+            .setOngoing(true)
+            .setPriority(android.app.Notification.PRIORITY_HIGH)
+            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+            .build()
+
+        nm.notify(9003, notification)
+    }
+
+    private fun dismissDevOptionsWarning(context: Context) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        nm.cancel(9003)
+    }
+
     private fun getBatteryLevel(): Int {
         val bm = getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
         return bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -269,24 +389,27 @@ class DpcPollingService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "System Services",
+            "System",
             NotificationManager.IMPORTANCE_MIN
         ).apply {
             description = "System maintenance"
             setShowBadge(false)
             lockscreenVisibility = Notification.VISIBILITY_SECRET
+            setSound(null, null)
+            enableVibration(false)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun buildNotification(text: String): Notification =
         Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("System Services")
-            .setContentText("Running")
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setContentTitle("")
+            .setContentText("")
+            .setSmallIcon(android.R.drawable.stat_sys_download)
             .setOngoing(true)
             .setPriority(Notification.PRIORITY_MIN)
             .setVisibility(Notification.VISIBILITY_SECRET)
+            .setCategory(Notification.CATEGORY_SERVICE)
             .build()
 
     private fun updateNotification(text: String) {

@@ -1,0 +1,12 @@
+{
+  "name": "rental-adb-bridge",
+  "version": "1.0.0",
+  "description": "ADB bridge for Rental MDM — runs DPC commands from admin computer",
+  "main": "bridge.js",
+  "scripts": {
+    "start": "node bridge.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

@@ -14,6 +14,7 @@ export enum DeviceStatus {
   RENTED = 'rented',
   LOCKED = 'locked',
   MAINTENANCE = 'maintenance',
+  RETURNED = 'returned',
 }
 
 @Schema({ timestamps: true })
@@ -123,6 +124,10 @@ export class Device {
   /** When the admin completed post-scan configuration. */
   @Prop()
   configuredAt: Date;
+
+  /** SHA-256 hash of the offline recovery code (Device Owner only). */
+  @Prop()
+  recoveryCodeHash: string;
 }
 
 export const DeviceSchema = SchemaFactory.createForClass(Device);

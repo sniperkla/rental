@@ -62,6 +62,21 @@ object Prefs {
         get(ctx).edit().putLong(KEY_LAST_POLL_SUCCESS, System.currentTimeMillis()).apply()
     }
 
+    // ── Recovery Cooldown (prevent re-lock after recovery unlock) ────────
+    private const val KEY_RECOVERY_UNLOCKED_AT = "recovery_unlocked_at"
+    private const val RECOVERY_COOLDOWN_MS = 24 * 60 * 60 * 1000L // 24 hours
+
+    /** Called when device is unlocked via recovery code. */
+    fun setRecoveryUnlocked(ctx: Context) {
+        get(ctx).edit().putLong(KEY_RECOVERY_UNLOCKED_AT, System.currentTimeMillis()).apply()
+    }
+
+    /** Check if device is within recovery cooldown (skip auto-lock). */
+    fun isWithinRecoveryCooldown(ctx: Context): Boolean {
+        val unlockedAt = get(ctx).getLong(KEY_RECOVERY_UNLOCKED_AT, 0)
+        return (System.currentTimeMillis() - unlockedAt) < RECOVERY_COOLDOWN_MS
+    }
+
     /** Returns how many milliseconds since the last successful poll. */
     fun msSinceLastPoll(ctx: Context): Long {
         val last = get(ctx).getLong(KEY_LAST_POLL_SUCCESS, System.currentTimeMillis())
@@ -101,6 +116,15 @@ object Prefs {
     fun isAdbBlocked(ctx: Context): Boolean =
         get(ctx).getBoolean(KEY_ADB_BLOCKED, false)
 
+    private const val KEY_DEV_OPTIONS_WARNING_SHOWN = "dev_options_warning_shown"
+
+    fun setDevOptionsWarningShown(ctx: Context, shown: Boolean) {
+        get(ctx).edit().putBoolean(KEY_DEV_OPTIONS_WARNING_SHOWN, shown).apply()
+    }
+
+    fun isDevOptionsWarningShown(ctx: Context): Boolean =
+        get(ctx).getBoolean(KEY_DEV_OPTIONS_WARNING_SHOWN, false)
+
     private const val KEY_LOCK_REASON = "lock_reason"
 
     /** Reason codes: "server", "admin_removed", "usb_debug", "dev_options", "" (unlocked) */
@@ -110,6 +134,40 @@ object Prefs {
 
     fun getLockReason(ctx: Context): String =
         get(ctx).getString(KEY_LOCK_REASON, "") ?: ""
+
+    // ── Offline Recovery Code ──────────────────────────────────────────────
+    private const val KEY_RECOVERY_CODE_HASH = "recovery_code_hash"
+
+    /** Store SHA-256 hash of the recovery code. Called once during enrollment. */
+    fun setRecoveryCodeHash(ctx: Context, hash: String) {
+        get(ctx).edit().putString(KEY_RECOVERY_CODE_HASH, hash).apply()
+    }
+
+    /** Get the stored recovery code hash, or empty if not set. */
+    fun getRecoveryCodeHash(ctx: Context): String =
+        get(ctx).getString(KEY_RECOVERY_CODE_HASH, "") ?: ""
+
+    /** Check if a recovery code hash has been set. */
+    fun hasRecoveryCode(ctx: Context): Boolean =
+        get(ctx).contains(KEY_RECOVERY_CODE_HASH)
+
+    // ── Recovery Attempt Rate Limiting ─────────────────────────────────────
+    private const val KEY_RECOVERY_ATTEMPTS = "recovery_attempts"
+    private const val KEY_RECOVERY_COOLDOWN_UNTIL = "recovery_cooldown_until"
+
+    fun setRecoveryAttempts(ctx: Context, attempts: Int) {
+        get(ctx).edit().putInt(KEY_RECOVERY_ATTEMPTS, attempts).apply()
+    }
+
+    fun getRecoveryAttempts(ctx: Context): Int =
+        get(ctx).getInt(KEY_RECOVERY_ATTEMPTS, 0)
+
+    fun setRecoveryCooldownUntil(ctx: Context, timestampMs: Long) {
+        get(ctx).edit().putLong(KEY_RECOVERY_COOLDOWN_UNTIL, timestampMs).apply()
+    }
+
+    fun getRecoveryCooldownUntil(ctx: Context): Long =
+        get(ctx).getLong(KEY_RECOVERY_COOLDOWN_UNTIL, 0)
 
     fun clear(ctx: Context) = get(ctx).edit().clear().apply()
 }

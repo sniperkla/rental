@@ -5,7 +5,7 @@
     android:versionName="1.1" >
 
     <uses-sdk
-        android:minSdkVersion="26"
+        android:minSdkVersion="28"
         android:targetSdkVersion="34" />
 
     <!-- Network -->
@@ -130,7 +130,11 @@
         <service
             android:name="com.rental.dpc.LockOverlayService"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="specialUse" >
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="mdm_lock_overlay" />
+        </service>
 
         <provider
             android:name="androidx.startup.InitializationProvider"

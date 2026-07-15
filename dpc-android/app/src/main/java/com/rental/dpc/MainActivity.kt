@@ -5,10 +5,14 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -107,9 +111,63 @@ class MainActivity : AppCompatActivity() {
 
         // Restore correct UI state
         if (Prefs.isEnrolled(this)) {
-            showEnrolledState()
+            // Check if device is actually configured by admin before showing enrolled state
+            checkBackendConfigAndShowState()
         } else {
             showScanState()
+        }
+    }
+
+    /**
+     * On startup, check backend config status before deciding which UI to show.
+     * If not configured yet → show waiting state.
+     * If configured → show enrolled state.
+     */
+    private fun checkBackendConfigAndShowState() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val deviceId = Prefs.getDeviceId(this@MainActivity)
+                val apiKey = Prefs.getApiKey(this@MainActivity)
+                val backendUrl = Prefs.getBackendUrl(this@MainActivity)
+
+                if (deviceId.isBlank() || apiKey.isBlank() || backendUrl.isBlank()) {
+                    withContext(Dispatchers.Main) { showEnrolledState() }
+                    return@launch
+                }
+
+                val request = Request.Builder()
+                    .url("$backendUrl/api/dpc/status")
+                    .addHeader("X-DPC-Device-Id", deviceId)
+                    .addHeader("X-DPC-Api-Key", apiKey)
+                    .get()
+                    .build()
+
+                val response = httpClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    val json = JSONObject(body)
+                    val configuredAt = json.optString("configuredAt", "")
+                    val securityMode = json.optString("securityMode", "")
+
+                    val isConfigured = configuredAt.isNotBlank() && configuredAt != "null" &&
+                            securityMode.isNotBlank() && securityMode != "null"
+
+                    withContext(Dispatchers.Main) {
+                        if (isConfigured) {
+                            Prefs.setSecurityMode(this@MainActivity, securityMode)
+                            showEnrolledState()
+                        } else {
+                            showWaitingForConfig()
+                        }
+                    }
+                } else {
+                    // Can't reach backend — show enrolled state (cached)
+                    withContext(Dispatchers.Main) { showEnrolledState() }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Config check failed: ${e.message}")
+                withContext(Dispatchers.Main) { showEnrolledState() }
+            }
         }
     }
 
@@ -182,125 +240,161 @@ class MainActivity : AppCompatActivity() {
      * On success → saves credentials, starts polling, requests Device Admin.
      */
     private fun selfRegisterAndEnroll(registrationToken: String, backendUrl: String) {
-        val androidId     = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
-        val model         = Build.MODEL       ?: "Unknown"
-        val brand         = Build.BRAND       ?: "Unknown"
-        val manufacturer  = Build.MANUFACTURER ?: "Unknown"
-        val androidVersion = Build.VERSION.RELEASE ?: "0"
-
-        Log.i(TAG, "selfRegisterAndEnroll → $backendUrl | device=$brand $model androidId=$androidId")
-
-        // Show registration is in progress on the UI (Toasts can be blocked by permissions)
+        Log.i(TAG, "selfRegisterAndEnroll → $backendUrl")
         setStatus("กำลังลงทะเบียนกับระบบ...")
         Toast.makeText(this, "กำลังลงทะเบียน...", Toast.LENGTH_SHORT).show()
 
-        val payload = JSONObject().apply {
-            put("registrationToken", registrationToken)
-            put("androidId", androidId)
-            put("model", model)
-            put("brand", brand)
-            put("manufacturer", manufacturer)
-            put("androidVersion", androidVersion)
-        }
-
-        val endpoint = "$backendUrl/api/dpc/self-register"
-        val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
-        val request = Request.Builder()
-            .url(endpoint)
-            // Use a browser User-Agent to bypass Cloudflare Browser Integrity Check
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-            .header("Accept", "application/json")
-            .post(requestBody)
-            .build()
-
-        Log.i(TAG, "POST $endpoint")
-
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val response = httpClient.newCall(request).execute()
-                val code     = response.code
-                val body     = response.body?.string() ?: ""
-                Log.i(TAG, "Response HTTP $code: $body")
-
-                withContext(Dispatchers.Main) {
-                    if (response.isSuccessful) {
-                        handleSelfRegisterSuccess(body, backendUrl)
-                    } else {
-                        val msg = "เซิร์ฟเวอร์ตอบ HTTP $code"
-                        Log.e(TAG, "Server error: $code — $body")
-                        setStatus(msg, isError = true)
-                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-                    }
+        ApiHelper.selfRegister(
+            context = this,
+            registrationToken = registrationToken,
+            backendUrl = backendUrl,
+            onSuccess = { deviceId, _ ->
+                runOnUiThread {
+                    Log.i(TAG, "✅ Self-registered! deviceId=${deviceId.take(8)}…")
+                    showWaitingForConfig()
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Network error during self-register", e)
-                withContext(Dispatchers.Main) {
-                    val msg = "เชื่อมต่อไม่ได้: ${e.message}"
+            },
+            onError = { msg ->
+                runOnUiThread {
                     setStatus(msg, isError = true)
-                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                 }
             }
-        }
+        )
     }
 
-    /** Parses a successful self-register response and shows mode selection. */
-    private fun handleSelfRegisterSuccess(body: String, backendUrl: String) {
-        try {
-            val json       = JSONObject(body)
-            val qr         = json.getJSONObject("enrollmentQr")
-            val deviceId   = qr.getString("standaloneDeviceId")
-            val apiKey     = qr.getString("rawApiKey")
-            val interval   = qr.optInt("pollingIntervalSeconds", 30)
+    // ── Waiting for Configuration ─────────────────────────────────────────────
 
-            Log.i(TAG, "✅ Self-registered! deviceId=${deviceId.take(8)}…")
+    private var configPolling = false
 
-            // Save credentials but don't set mode yet
-            Prefs.save(this, deviceId, apiKey, backendUrl, interval)
-
-            // Show mode selection screen
-            showModeSelection()
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse self-register response", e)
-            setStatus("ข้อมูลตอบกลับไม่ถูกต้อง: ${e.message}", isError = true)
-            Toast.makeText(this, "ลงทะเบียนไม่สำเร็จ: ${e.message}", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    // ── Mode Selection ───────────────────────────────────────────────────────
-
-    private fun showModeSelection() {
+    private fun showWaitingForConfig() {
         btnScan.visibility = View.GONE
         layoutEnrolled.visibility = View.GONE
         layoutModeSelect.visibility = View.VISIBLE
-        setStatus("ลงทะเบียนสำเร็จ! เลือกระดับความปลอดภัย")
 
-        findViewById<LinearLayout>(R.id.btnModeAdmin).setOnClickListener {
-            selectMode("device-admin")
+        // Build waiting UI
+        layoutModeSelect.removeAllViews()
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(32, 32, 32, 32)
         }
 
-        findViewById<LinearLayout>(R.id.btnModeOwner).setOnClickListener {
-            selectMode("device-owner")
-        }
+        container.addView(TextView(this).apply {
+            text = "✓"
+            textSize = 48f
+            gravity = Gravity.CENTER
+            setTextColor(0xFF00E676.toInt())
+            setPadding(0, 0, 0, 16)
+        })
+
+        container.addView(TextView(this).apply {
+            text = "เชื่อมต่อสำเร็จ"
+            textSize = 20f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(0xFF00E676.toInt())
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 8)
+        })
+
+        container.addView(TextView(this).apply {
+            text = "กำลังรอแอดมินตั้งค่าจาก Web Dashboard\nกรุณามอบเครื่องให้แอดมินเพื่อเลือกโหมดความปลอดภัย"
+            textSize = 14f
+            setTextColor(0xFF9EAFCD.toInt())
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 24)
+            setLineSpacing(6f, 1f)
+        })
+
+        container.addView(TextView(this).apply {
+            text = "กำลังตรวจสอบอัตโนมัติ..."
+            textSize = 12f
+            setTextColor(0xFF6B7280.toInt())
+            gravity = Gravity.CENTER
+        })
+
+        layoutModeSelect.addView(container)
+        setStatus("รอแอดมินตั้งค่าจาก Web Dashboard...")
+
+        // Start polling backend for configuration changes
+        startConfigPolling()
     }
 
-    private fun selectMode(mode: String) {
-        Prefs.setSecurityMode(this, mode)
-        Log.i(TAG, "Security mode selected: $mode")
+    private fun startConfigPolling() {
+        if (configPolling) return
+        configPolling = true
 
-        DpcPollingService.start(this)
+        val handler = Handler(Looper.getMainLooper())
+        val checkRunnable = object : Runnable {
+            override fun run() {
+                if (!configPolling) return
 
-        if (mode == "device-owner") {
-            // Device Owner: show enrolled state with ADB instructions
-            setStatus("Device Owner — ต้องรัน ADB จากคอมพิวเตอร์")
-            showEnrolledState()
-            Toast.makeText(this, "ต้องรันคำสั่ง ADB จากคอมพิวเตอร์เพื่อเปิดใช้งาน Device Owner", Toast.LENGTH_LONG).show()
-        } else {
-            // Device Admin: request activation and show enrolled
-            setStatus("กำลังเปิดใช้งาน Device Admin...")
-            requestDeviceAdmin()
-            showEnrolledState()
+                // Poll backend to check if admin has configured the device
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val deviceId = Prefs.getDeviceId(this@MainActivity)
+                        val apiKey = Prefs.getApiKey(this@MainActivity)
+                        val backendUrl = Prefs.getBackendUrl(this@MainActivity)
+
+                        if (deviceId.isBlank() || apiKey.isBlank() || backendUrl.isBlank()) return@launch
+
+                        val request = Request.Builder()
+                            .url("$backendUrl/api/dpc/status")
+                            .addHeader("X-DPC-Device-Id", deviceId)
+                            .addHeader("X-DPC-Api-Key", apiKey)
+                            .get()
+                            .build()
+
+                        val response = httpClient.newCall(request).execute()
+                        if (response.isSuccessful) {
+                            val body = response.body?.string() ?: return@launch
+                            val json = JSONObject(body)
+                            val configuredAt = json.optString("configuredAt", "")
+                            val securityMode = json.optString("securityMode", "")
+
+                            withContext(Dispatchers.Main) {
+                                // Handle both null JSON values and "null" strings
+                                val isConfigured = configuredAt.isNotBlank() && configuredAt != "null" &&
+                                        securityMode.isNotBlank() && securityMode != "null"
+
+                                if (isConfigured) {
+                                    // Admin has configured the device from dashboard
+                                    Prefs.setSecurityMode(this@MainActivity, securityMode)
+                                    Log.i(TAG, "✅ Backend configured: mode=$securityMode")
+
+                                    if (securityMode == "device-owner") {
+                                        // Check if Device Owner is actually set via ADB
+                                        if (dpm.isDeviceOwnerApp(packageName)) {
+                                            DpcAdminReceiver().applyDeviceOwnerPolicies(this@MainActivity)
+                                            configPolling = false
+                                            setStatus("Device Owner พร้อมใช้งาน!")
+                                            showEnrolledState()
+                                            Toast.makeText(this@MainActivity, "Device Owner พร้อมใช้งาน!", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            setStatus("Device Owner — กำลังรอ ADB activation...")
+                                        }
+                                    } else {
+                                        // Device Admin — request activation
+                                        configPolling = false
+                                        requestDeviceAdmin()
+                                        showEnrolledState()
+                                    }
+                                } else {
+                                    Log.d(TAG, "Device not yet configured by admin")
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Config poll error: ${e.message}")
+                    }
+                }
+
+                // Check again in 5 seconds
+                handler.postDelayed(this, 5000)
+            }
         }
+        handler.post(checkRunnable)
     }
 
     // ── Device Admin ─────────────────────────────────────────────────────────

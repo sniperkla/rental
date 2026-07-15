@@ -13,6 +13,7 @@ import { AndroidMdmModule } from './android-mdm/android-mdm.module';
 import { AppleMdmModule } from './apple-mdm/apple-mdm.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { StandaloneMdmModule } from './standalone-mdm/standalone-mdm.module';
+import { AdbBridgeModule } from './adb-bridge/adb-bridge.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -37,6 +38,7 @@ import { AppService } from './app.service';
     AppleMdmModule,
     DashboardModule,
     StandaloneMdmModule, // Hybrid MDM: Standalone/Offline Android (GMS-free) + Unified Admin API
+    AdbBridgeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
