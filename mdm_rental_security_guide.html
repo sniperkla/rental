@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>คู่มือระบบควบคุมเครื่องเช่า MDM (Android & iOS Security Guide)</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+    
+    body {
+      font-family: 'Sarabun', sans-serif;
+      line-height: 1.6;
+      color: #334155;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background-color: #f8fafc;
+    }
+
+    .container {
+      background: #ffffff;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+      border: 1px solid #e2e8f0;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: #1e1b4b;
+      border-bottom: 2px solid #8b5cf6;
+      padding-bottom: 12px;
+      margin-top: 0;
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #4c1d95;
+      margin-top: 30px;
+      border-left: 4px solid #8b5cf6;
+      padding-left: 10px;
+    }
+
+    h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-top: 20px;
+    }
+
+    p, li {
+      font-size: 14px;
+      color: #475569;
+    }
+
+    ul, ol {
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 13px;
+    }
+
+    th, td {
+      border: 1px solid #e2e8f0;
+      padding: 10px 12px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f1f5f9;
+      color: #1e293b;
+      font-weight: 600;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-success { background: #dcfce7; color: #15803d; }
+    .badge-warning { background: #fef9c3; color: #a16207; }
+    .badge-danger { background: #fee2e2; color: #b91c1c; }
+
+    .note-box {
+      background: #f0f9ff;
+      border-left: 4px solid #0284c7;
+      padding: 15px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+    }
+
+    .note-box-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: #0369a1;
+      margin-bottom: 4px;
+    }
+
+    .warning-box {
+      background: #fffbeb;
+      border-left: 4px solid #d97706;
+      padding: 15px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+    }
+
+    .warning-box-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: #b45309;
+      margin-bottom: 4px;
+    }
+
+    .danger-box {
+      background: #fef2f2;
+      border-left: 4px solid #dc2626;
+      padding: 15px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+    }
+
+    .danger-box-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: #b91c1c;
+      margin-bottom: 4px;
+    }
+
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 11px;
+      color: #94a3b8;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 20px;
+    }
+
+    @media print {
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #ffffff;
+      }
+      .container {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div style="text-align: center; margin-bottom: 30px;">
+    <span style="font-size: 48px;">🛡️</span>
+    <h1 style="border: none; padding: 0; margin: 10px 0 5px 0;">คู่มือระบบควบคุมเครื่องเช่า MDM</h1>
+    <p style="color: #64748b; font-size: 14px; margin: 0;">ความแตกต่างทางเทคนิค, การป้องกันการล้างเครื่อง และข้อจำกัดความปลอดภัยของ iOS & Android</p>
+  </div>
+
+  <h2>1. ตารางเปรียบเทียบระบบควบคุม (Android vs iOS)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>คุณสมบัติการควบคุม</th>
+        <th>Android (Google EMM)</th>
+        <th>iOS (Supervised/ABM)</th>
+        <th>iOS (OTA Web-only) <span style="color:red;">*เสี่ยงสูง</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>การล้างเครื่อง (Factory Reset)</strong></td>
+        <td><span class="badge badge-success">บล็อคได้ถาวร</span></td>
+        <td><span class="badge badge-success">บล็อคได้ถาวร</span></td>
+        <td><span class="badge badge-danger">บล็อคไม่ได้</span></td>
+      </tr>
+      <tr>
+        <td><strong>การลบโปรไฟล์ควบคุมออกเอง</strong></td>
+        <td><span class="badge badge-success">บล็อคได้ถาวร</span></td>
+        <td><span class="badge badge-success">บล็อคได้ถาวร</span></td>
+        <td><span class="badge badge-danger">ลบออกเองได้ใน 2 คลิก</span></td>
+      </tr>
+      <tr>
+        <td><strong>การควบคุมตอน Offline (ไม่มีเน็ต)</strong></td>
+        <td><span class="badge badge-success">ทำงานตลอดเวลา</span></td>
+        <td><span class="badge badge-success">ทำงานตลอดเวลา</span></td>
+        <td><span class="badge badge-warning">จำกัดเฉพาะนโยบายเดิม</span></td>
+      </tr>
+      <tr>
+        <td><strong>การล็อค/ปลดล็อคหน้าจอ</strong></td>
+        <td><span class="badge badge-success">ทำได้ (ข้อมูลไม่หาย)</span></td>
+        <td><span class="badge badge-success">ทำได้ (ข้อมูลไม่หาย)</span></td>
+        <td><span class="badge badge-warning">ทำได้เฉพาะการล็อค</span></td>
+      </tr>
+      <tr>
+        <td><strong>การบล็อคฟีเจอร์รายเครื่อง</strong><br>(กล้อง, USB, ลงแอป, โทรออก)</td>
+        <td><span class="badge badge-success">ทำได้อิสระ</span></td>
+        <td><span class="badge badge-success">ทำได้อิสระ</span></td>
+        <td><span class="badge badge-danger">บล็อคไม่ได้</span></td>
+      </tr>
+      <tr>
+        <td><strong>ราคาค่าธรรมเนียมพอร์ทัล</strong></td>
+        <td><span class="badge badge-success">ฟรี (1,000 เครื่องแรก)</span></td>
+        <td><span class="badge badge-success">ฟรีตลอดชีพ</span></td>
+        <td><span class="badge badge-success">ฟรีตลอดชีพ</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. พฤติกรรมเมื่ออุปกรณ์ไม่มีอินเทอร์เน็ต (Offline)</h2>
+  <p>เมื่อเครื่องลูกค้าขาดการเชื่อมต่ออินเทอร์เน็ต (เช่น ปิดเน็ต, ถอดซิม):</p>
+  <ul>
+    <li><strong>นโยบายที่ตั้งค่าไว้แล้ว:</strong> เช่น การบล็อคล้างเครื่อง (Anti-Reset) หรือการบล็อคใช้งานกล้อง/USB จะยังคงทำงานได้อย่างสมบูรณ์แบบ 100% ออฟไลน์ เพราะระบบความปลอดภัยถูกบันทึกลงชิปความปลอดภัยในตัวเครื่องเรียบร้อยแล้ว</li>
+    <li><strong>การส่งคำสั่งล็อกหน้าจอใหม่ (Remote Lock):</strong> หากคุณกดล็อกหน้าจอขณะเครื่องออฟไลน์ คำสั่งจะถูกส่งไปต่อคิวรอไว้บนระบบคลาวด์ของ Google/Apple ทันทีที่เครื่องปลายทางเชื่อมต่อเน็ตใดๆ คำสั่งล็อกจะทำงานใน 2 วินาที</li>
+    <li><strong>การป้องกันการปิดเน็ตยาวหนีหนี้:</strong> ระบบสามารถกำหนดค่าเพิ่มเติมเพื่อให้เครื่องสั่งล็อกตัวเองอัตโนมัติหากไม่มีการเชื่อมต่ออินเทอร์เน็ตกลับมาเช็คอินในเวลาที่กำหนด (เช่น 24 ชั่วโมง)</li>
+  </ul>
+
+  <div class="note-box">
+    <div class="note-box-title">💡 การล็อก / ปลดล็อก ข้อมูลลูกค้าหายไหม?</div>
+    <p style="margin: 0; font-size: 13px;"><strong>ไม่หายครับ!</strong> การสั่ง Lock/Unlock เป็นเพียงการสั่งบล็อคการเข้าใช้งานชั่วคราว ข้อมูล รูปภาพ แชทไลน์ และแอปทั้งหมดในเครื่องจะยังคงปลอดภัย 100% ลูกค้าใช้งานต่อได้ทันทีโดยไม่ต้องตั้งค่าใหม่</p>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>3. ความเสี่ยงและการย้ายระบบหลังบ้าน (Server Migration)</h2>
+  
+  <h3>การย้ายหรือเปลี่ยนเซิร์ฟเวอร์</h3>
+  <ul>
+    <li><strong>ฝั่ง Android:</strong> ปลอดภัย 100% เพราะเครื่อง Android สื่อสารผ่าน Google Cloud ตลอดเวลา การย้ายเซิร์ฟเวอร์หลังบ้านเพียงแค่นำคีย์ชุดเดิมไปเปิดใช้งานบนโฮสติ้งใหม่ ระบบจะควบคุมเครื่องลูกค้าต่อได้ทันทีอย่างไร้รอยต่อ</li>
+    <li><strong>ฝั่ง iOS:</strong> เครื่อง iOS สื่อสารยิงตรงมาที่ URL โดเมนเซิร์ฟเวอร์ของเรา (เช่น <code>mdm.yourdomain.com</code>)
+      <br>⚠️ <em>ข้อบังคับ:</em> ต้องใช้ชื่อโดเมนคงเดิมในการเปลี่ยนย้ายคลาวด์ หากคุณเปลี่ยนชื่อโดเมน เครื่อง iOS ที่อยู่ในมือลูกค้าจะหลุดการเชื่อมต่อทันทีและไม่สามารถสั่งการได้อีก
+    </li>
+  </ul>
+
+  <div class="danger-box">
+    <div class="danger-box-title">🚨 ข้อควรระวังสูงสุด: การเปลี่ยนบัญชี Apple Business Manager (ABM)</div>
+    <p style="margin: 0; font-size: 13px;">หากคุณทำการเปลี่ยนบัญชี ABM (หรือเปลี่ยนใบรับรอง APNs push certificate) เครื่องลูกค้าเดิมทั้งหมดจะปฏิเสธการยอมรับคำสั่งสั่งการทันที (เครื่องหลุดการควบคุม) ดังนั้น ควรมั่นใจว่าสมัครและใช้งานบัญชี ABM ขององค์กรอย่างถาวร หากต้องการย้ายเครื่องข้าม ABM จะต้องนำเครื่องจริงกลับมาต่อสาย USB กับเครื่อง Mac เพื่อล้างเครื่องและย้ายใหม่ทีละเครื่องเท่านั้น</p>
+  </div>
+
+  <h2>4. ทางเลือกการทำ iOS MDM สำหรับบุคคลธรรมดา (ไม่มีบัญชีนิติบุคคล)</h2>
+  <p>เนื่องจากการเปิดบัญชี Apple Business Manager (ABM) มีการขอตรวจสอบทะเบียนธุรกิจและรหัส D-U-N-S หากคุณเป็นบุคคลธรรมดาสามารถจัดการได้ 2 แนวทาง:</p>
+
+  <h3>ทางเลือกที่ A: ยอมรับความเสี่ยงสูง — เปิดใช้งานผ่านหน้าเว็บอย่างเดียว (OTA Web-only)</h3>
+  <ul>
+    <li><strong>วิธีการ:</strong> ให้ลูกค้านำเครื่องสแกน QR / เปิด Safari เข้าไปติดตั้งโปรไฟล์ควบคุมจากหน้าเว็บโดยตรง</li>
+    <li><strong>ความเสี่ยง:</strong> ลูกค้าสามารถกด "ลบโปรไฟล์การควบคุม" ออกเองได้ตลอดเวลาในหน้า Settings ของ iPhone และหากลูกค้ากดล้างเครื่อง ตัวโปรไฟล์ควบคุมก็จะถูกลบหายไปทันที</li>
+  </ul>
+
+  <h3>ทางเลือกที่ B: จดทะเบียนพาณิชย์ธรรมดา (จดในนามบุคคล) เพื่อเปิดใช้สิทธิ์เต็มระบบ</h3>
+  <ol>
+    <li>จดทะเบียนพาณิชย์ร้านค้า ณ สำนักงานเขต/เทศบาล (ใช้ชื่อตัวคุณเอง) เสียค่าธรรมเนียมประมาณ 50 บาท</li>
+    <li>นำเอกสารไปขอจดทะเบียนหมายเลข D-U-N-S Number (ขอฟรีผ่านออนไลน์เพื่อยืนยันตัวตนธุรกิจกับระบบสากล)</li>
+    <li>จดโดเมนเนมเว็บไซต์ของตัวเอง (ปีละ 300 บาท) เพื่อสร้างอีเมล์สำหรับใช้สมัคร เช่น <code>admin@yourshop.com</code></li>
+    <li>ยื่นข้อมูลเหล่านี้สมัคร Apple Business Manager เพื่อรับสิทธิ์การล็อคเครื่องระดับสูงสุด (ลบโปรไฟล์ไม่ได้ ล้างเครื่องไม่ได้)</li>
+  </ol>
+
+  <h2>5. สถาปัตยกรรมทางเทคนิคและการสื่อสาร (Technical Architecture & Flow)</h2>
+  
+  <h3>🤖 กลไกการทำงานของ Android MDM (Google EMM Broker)</h3>
+  <p>Android จะใช้สถาปัตยกรรมแบบมี "คนกลาง" (Google) คอยจัดการคำสั่ง เพื่อความเสถียรและประหยัดแบตเตอรี่เครื่องปลายทาง:</p>
+  <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; line-height: 1.5; margin: 10px 0;">
+    [RentControl Backend] --(1. OAuth2 HTTPS POST)--> [Google EMM Server]<br>
+                                                            |<br>
+                                                    (2. Play Services Push)<br>
+                                                            |<br>
+                                                            v<br>
+      [เครื่องลูกค้า] <--(3. ดึงนโยบาย / ทำตามคำสั่ง)-- [Android Device Policy App]
+  </div>
+  <ul>
+    <li><strong>ขั้นตอนการลงทะเบียน:</strong> เมื่อแสกน QR Code ตัวระบบ Android จะดาวน์โหลดแอปของกูเกิ้ลชื่อ <em>Android Device Policy</em> ลงเป็นแอปหลักของระบบ (System App) และผูกชื่อเครื่องเข้ารหัสกับ RentControl Backend</li>
+    <li><strong>ขั้นตอนการสั่งงาน (เช่น สั่งล็อก/บล็อคฟีเจอร์):</strong> 
+      <ol>
+        <li>เซิร์ฟเวอร์ของเรายิงคำสั่งไปหา Google API (เช่น <code>/enterprises/{entId}/devices/{devId}:issueCommand</code>)</li>
+        <li>Google ส่งสัญญาณสั่งตัวแอป Android Device Policy ในเครื่องผู้เช่าผ่านท่อ Google Play Services</li>
+        <li>ตัวแอปทำการควบคุมสิทธิ์การเข้าถึงหน้าจอและฟังก์ชั่นภายในเครื่องปลายทางทันที</li>
+      </ol>
+    </li>
+  </ul>
+
+  <h3>🍎 กลไกการทำงานของ iOS MDM (APNs Wake & Command Pull)</h3>
+  <p>iOS จะใช้สถาปัตยกรรมแบบ "ปลุกเครื่องมาดึงงาน" (Wake & Command Pull) โดยใช้อีเวนต์แจ้งเตือนเงียบ (APNs) เป็นตัวขับเคลื่อน:</p>
+  <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; line-height: 1.5; margin: 10px 0;">
+    [RentControl Backend] --(1. คิวคำสั่งในฐานข้อมูลตัวเอง)<br>
+    [RentControl Backend] --(2. ยิงปลุกผ่านใบรับรอง Cert)--> [Apple APNs Server]<br>
+                                                                  |<br>
+                                                           (3. ปลุกเครื่องเงียบ)<br>
+                                                                  |<br>
+                                                                  v<br>
+    [เครื่องลูกค้า] --(4. ยิง GET มาดึงคิวงาน XML)--> [RentControl Backend (GET /commands)]
+  </div>
+  <ul>
+    <li><strong>ขั้นตอนการลงทะเบียน:</strong> เมื่อเครื่องตรวจพบการบังคับลงทะเบียนหรือดาวน์โหลดโปรไฟล์ iOS จะนำเข้าคีย์สาธารณะและบันทึก URL ข้อมูลเซิร์ฟเวอร์หลังบ้านของเราเข้าสู่ส่วนแกนระบบหลัก (iOS Settings Kernel) โดยเครื่องส่งรหัส UDID และ Push Token กลับมาบันทึกใน MongoDB</li>
+    <li><strong>ขั้นตอนการสั่งงาน (เช่น สั่งล็อก/บล็อคฟีเจอร์):</strong>
+      <ol>
+        <li>เซิร์ฟเวอร์เราบันทึกคำสั่งไว้ในฐานข้อมูลของเราเอง (ไม่ได้ส่งคำสั่งไปให้แอปเปิ้ลเก็บแบบแอนดรอยด์)</li>
+        <li>เซิร์ฟเวอร์เราเชื่อมต่อท่อ HTTP/2 ตรงไปยังศูนย์กลางของแอปเปิ้ล (APNs) เพื่อยิงคำสั่งปลุกเครื่องทางอ้อม</li>
+        <li>ตัวเครื่อง iOS เมื่อได้รับสัญญาณปลุกเงียบ จะยิงมาหาบอร์ดเซิร์ฟเวอร์ของเราทันทีเพื่อดึงไฟล์ XML คำสั่งไปประมวลผล</li>
+        <li>ตัวเครื่อง iOS ดำเนินการล็อกหน้าจอหรือติดตั้งนโยบายขีดจำกัด จากนั้นตอบรับ (Acknowledge) กลับมาที่เซิร์ฟเวอร์เรา</li>
+      </ol>
+    </li>
+  </ul>
+
+  <div class="footer">
+    <p>เอกสารฉบับนี้สร้างขึ้นโดยระบบควบคุมอุปกรณ์เช่า RentControl Device Management System</p>
+    <p>วิธีกดพิมพ์/เซฟเป็น PDF: กดปุ่ม Ctrl + P (Windows) หรือ Cmd + P (Mac) ในบราวเซอร์ของคุณ แล้วเลือก "Save as PDF"</p>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rental_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/uploads:/usr/src/app/uploads
+    healthcheck:
+      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://127.0.0.1:3001/api || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - proxy-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rental_frontend
+    restart: unless-stopped
+    env_file:
+     - ./frontend/.env
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true

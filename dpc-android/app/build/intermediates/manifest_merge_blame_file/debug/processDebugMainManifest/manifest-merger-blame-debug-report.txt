@@ -1,0 +1,314 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.rental.dpc"
+4    android:versionCode="2"
+5    android:versionName="1.1" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="34" />
+10
+11    <!-- Network -->
+12    <uses-permission android:name="android.permission.INTERNET" />
+12-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:5:5-67
+12-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:5:22-64
+13    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+13-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:6:5-79
+13-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:6:22-76
+14
+15    <!-- Wake lock to keep polling service alive -->
+16    <uses-permission android:name="android.permission.WAKE_LOCK" />
+16-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:9:5-68
+16-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:9:22-65
+17    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+17-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:10:5-81
+17-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:10:22-78
+18
+19    <!-- Device Admin permissions for lock/unlock -->
+20    <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" />
+20-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:13:5-76
+20-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:13:22-73
+21
+22    <!-- Foreground Service permissions (Required for Android 9+ & Android 14+ DataSync) -->
+23    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+23-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:16:5-77
+23-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:16:22-74
+24    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+24-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:17:5-87
+24-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:17:22-84
+25    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+25-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:18:5-89
+25-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:18:22-86
+26
+27    <!-- System overlay for kiosk lock screen -->
+28    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+28-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:21:5-78
+28-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:21:22-75
+29
+30    <!-- Optional permission to read IMEI on Android 9 and below -->
+31    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+31-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:24:5-75
+31-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:24:22-72
+32
+33    <!-- Camera for QR scanning -->
+34    <uses-permission android:name="android.permission.CAMERA" />
+34-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:27:5-65
+34-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:27:22-62
+35
+36    <uses-feature
+36-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:28:5-85
+37        android:name="android.hardware.camera"
+37-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:28:19-57
+38        android:required="false" />
+38-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:28:58-82
+39
+40    <!-- Install packages silently (requires Device Owner) -->
+41    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+41-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:31:5-83
+41-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:31:22-80
+42
+43    <permission
+43-->[androidx.core:core:1.12.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/a831d571434a1917480b6ad7f3179b90/transformed/core-1.12.0/AndroidManifest.xml:22:5-24:47
+44        android:name="com.rental.dpc.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+44-->[androidx.core:core:1.12.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/a831d571434a1917480b6ad7f3179b90/transformed/core-1.12.0/AndroidManifest.xml:23:9-81
+45        android:protectionLevel="signature" />
+45-->[androidx.core:core:1.12.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/a831d571434a1917480b6ad7f3179b90/transformed/core-1.12.0/AndroidManifest.xml:24:9-44
+46
+47    <uses-permission android:name="com.rental.dpc.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+47-->[androidx.core:core:1.12.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/a831d571434a1917480b6ad7f3179b90/transformed/core-1.12.0/AndroidManifest.xml:26:5-97
+47-->[androidx.core:core:1.12.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/a831d571434a1917480b6ad7f3179b90/transformed/core-1.12.0/AndroidManifest.xml:26:22-94
+48
+49    <uses-feature
+49-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:28:5-30:36
+50        android:name="android.hardware.camera.front"
+50-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:29:9-53
+51        android:required="false" /> <!-- TODO replace above two with next line after Android 4.2 -->
+51-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:30:9-33
+52    <!-- <uses-feature android:name="android.hardware.camera.any"/> -->
+53    <uses-feature
+53-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:33:5-35:36
+54        android:name="android.hardware.camera.autofocus"
+54-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:34:9-57
+55        android:required="false" />
+55-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:35:9-33
+56    <uses-feature
+56-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:36:5-38:36
+57        android:name="android.hardware.camera.flash"
+57-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:37:9-53
+58        android:required="false" />
+58-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:38:9-33
+59    <uses-feature
+59-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:39:5-41:36
+60        android:name="android.hardware.screen.landscape"
+60-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:40:9-57
+61        android:required="false" />
+61-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:41:9-33
+62    <uses-feature
+62-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:42:5-44:36
+63        android:name="android.hardware.wifi"
+63-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:43:9-45
+64        android:required="false" />
+64-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:44:9-33
+65
+66    <application
+66-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:33:5-97:19
+67        android:allowBackup="false"
+67-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:34:9-36
+68        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+68-->[androidx.core:core:1.12.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/a831d571434a1917480b6ad7f3179b90/transformed/core-1.12.0/AndroidManifest.xml:28:18-86
+69        android:debuggable="true"
+70        android:extractNativeLibs="false"
+71        android:icon="@mipmap/ic_launcher"
+71-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:35:9-43
+72        android:label="@string/app_name"
+72-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:36:9-41
+73        android:roundIcon="@mipmap/ic_launcher_round"
+73-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:37:9-54
+74        android:supportsRtl="true"
+74-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:38:9-35
+75        android:theme="@style/Theme.AppCompat.NoActionBar"
+75-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:39:9-59
+76        android:usesCleartextTraffic="true" >
+76-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:40:9-44
+77
+78        <!-- Main enrollment screen (hidden from recents after enrollment) -->
+79        <activity
+79-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:43:9-51:20
+80            android:name="com.rental.dpc.MainActivity"
+80-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:44:13-41
+81            android:excludeFromRecents="true"
+81-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:46:13-46
+82            android:exported="true" >
+82-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:45:13-36
+83            <intent-filter>
+83-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:47:13-50:29
+84                <action android:name="android.intent.action.MAIN" />
+84-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:48:17-69
+84-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:48:25-66
+85
+86                <category android:name="android.intent.category.LAUNCHER" />
+86-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:49:17-77
+86-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:49:27-74
+87            </intent-filter>
+88        </activity>
+89
+90        <!-- Kiosk Lock Screen — shown over keyguard when LOCK command received -->
+91        <activity
+91-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:54:9-61:80
+92            android:name="com.rental.dpc.LockActivity"
+92-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:55:13-41
+93            android:excludeFromRecents="true"
+93-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:57:13-46
+94            android:exported="false"
+94-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:56:13-37
+95            android:launchMode="singleInstance"
+95-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:60:13-48
+96            android:showOnLockScreen="true"
+96-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:58:13-44
+97            android:taskAffinity="com.rental.dpc.lock"
+97-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:59:13-55
+98            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+98-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:61:13-77
+99
+100        <!-- Device Admin Receiver - Required for lock/unlock commands -->
+101        <receiver
+101-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:64:9-74:20
+102            android:name="com.rental.dpc.DpcAdminReceiver"
+102-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:65:13-45
+103            android:exported="true"
+103-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:66:13-36
+104            android:permission="android.permission.BIND_DEVICE_ADMIN" >
+104-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:67:13-70
+105            <meta-data
+105-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:68:13-70:56
+106                android:name="android.app.device_admin"
+106-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:69:17-56
+107                android:resource="@xml/device_admin" />
+107-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:70:17-53
+108
+109            <intent-filter>
+109-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:71:13-73:29
+110                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+110-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:72:17-82
+110-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:72:25-79
+111            </intent-filter>
+112        </receiver>
+113
+114        <!-- Boot receiver to restart polling after reboot -->
+115        <receiver
+115-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:77:9-83:20
+116            android:name="com.rental.dpc.BootReceiver"
+116-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:78:13-41
+117            android:exported="true" >
+117-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:79:13-36
+118            <intent-filter>
+118-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:80:13-82:29
+119                <action android:name="android.intent.action.BOOT_COMPLETED" />
+119-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:81:17-79
+119-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:81:25-76
+120            </intent-filter>
+121        </receiver>
+122
+123        <!-- Background polling worker (via WorkManager) -->
+124        <service
+124-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:86:9-89:56
+125            android:name="com.rental.dpc.DpcPollingService"
+125-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:87:13-46
+126            android:exported="false"
+126-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:88:13-37
+127            android:foregroundServiceType="dataSync" />
+127-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:89:13-53
+128
+129        <!-- Kiosk lock overlay service -->
+130        <service
+130-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:92:9-95:58
+131            android:name="com.rental.dpc.LockOverlayService"
+131-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:93:13-47
+132            android:exported="false"
+132-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:94:13-37
+133            android:foregroundServiceType="specialUse" />
+133-->/Users/katanyoo/Desktop/rental/dpc-android/app/src/main/AndroidManifest.xml:95:13-55
+134
+135        <provider
+135-->[androidx.emoji2:emoji2:1.2.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/1664b372d6601727ac499f6d882a2112/transformed/emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
+136            android:name="androidx.startup.InitializationProvider"
+136-->[androidx.emoji2:emoji2:1.2.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/1664b372d6601727ac499f6d882a2112/transformed/emoji2-1.2.0/AndroidManifest.xml:25:13-67
+137            android:authorities="com.rental.dpc.androidx-startup"
+137-->[androidx.emoji2:emoji2:1.2.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/1664b372d6601727ac499f6d882a2112/transformed/emoji2-1.2.0/AndroidManifest.xml:26:13-68
+138            android:exported="false" >
+138-->[androidx.emoji2:emoji2:1.2.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/1664b372d6601727ac499f6d882a2112/transformed/emoji2-1.2.0/AndroidManifest.xml:27:13-37
+139            <meta-data
+139-->[androidx.emoji2:emoji2:1.2.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/1664b372d6601727ac499f6d882a2112/transformed/emoji2-1.2.0/AndroidManifest.xml:29:13-31:52
+140                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+140-->[androidx.emoji2:emoji2:1.2.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/1664b372d6601727ac499f6d882a2112/transformed/emoji2-1.2.0/AndroidManifest.xml:30:17-75
+141                android:value="androidx.startup" />
+141-->[androidx.emoji2:emoji2:1.2.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/1664b372d6601727ac499f6d882a2112/transformed/emoji2-1.2.0/AndroidManifest.xml:31:17-49
+142            <meta-data
+142-->[androidx.lifecycle:lifecycle-process:2.6.1] /Users/katanyoo/.gradle/caches/9.3.0/transforms/12c82a482ae1b423ef015ac1e9814a73/transformed/lifecycle-process-2.6.1/AndroidManifest.xml:29:13-31:52
+143                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+143-->[androidx.lifecycle:lifecycle-process:2.6.1] /Users/katanyoo/.gradle/caches/9.3.0/transforms/12c82a482ae1b423ef015ac1e9814a73/transformed/lifecycle-process-2.6.1/AndroidManifest.xml:30:17-78
+144                android:value="androidx.startup" />
+144-->[androidx.lifecycle:lifecycle-process:2.6.1] /Users/katanyoo/.gradle/caches/9.3.0/transforms/12c82a482ae1b423ef015ac1e9814a73/transformed/lifecycle-process-2.6.1/AndroidManifest.xml:31:17-49
+145            <meta-data
+145-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:29:13-31:52
+146                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+146-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:30:17-85
+147                android:value="androidx.startup" />
+147-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:31:17-49
+148        </provider>
+149
+150        <receiver
+150-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:34:9-52:20
+151            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+151-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:35:13-76
+152            android:directBootAware="false"
+152-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:36:13-44
+153            android:enabled="true"
+153-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:37:13-35
+154            android:exported="true"
+154-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:38:13-36
+155            android:permission="android.permission.DUMP" >
+155-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:39:13-57
+156            <intent-filter>
+156-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:40:13-42:29
+157                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+157-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:17-91
+157-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:25-88
+158            </intent-filter>
+159            <intent-filter>
+159-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:43:13-45:29
+160                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+160-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:17-85
+160-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:25-82
+161            </intent-filter>
+162            <intent-filter>
+162-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:46:13-48:29
+163                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+163-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:17-88
+163-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:25-85
+164            </intent-filter>
+165            <intent-filter>
+165-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:49:13-51:29
+166                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+166-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:17-95
+166-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/0ccacf28c85b2264aa0c2144d074f145/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:25-92
+167            </intent-filter>
+168        </receiver>
+169
+170        <activity
+170-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:47:9-53:63
+171            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+171-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:48:13-74
+172            android:clearTaskOnLaunch="true"
+172-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:49:13-45
+173            android:screenOrientation="sensorLandscape"
+173-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:50:13-56
+174            android:stateNotNeeded="true"
+174-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:51:13-42
+175            android:theme="@style/zxing_CaptureTheme"
+175-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:52:13-54
+176            android:windowSoftInputMode="stateAlwaysHidden" />
+176-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/katanyoo/.gradle/caches/9.3.0/transforms/329a4905eddd5b3e5863848aa9cd0536/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:53:13-60
+177    </application>
+178
+179</manifest>

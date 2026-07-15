@@ -1,0 +1,25 @@
+R_DEF: Internal format may change without notice
+local
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+id btnModeAdmin
+id btnModeOwner
+id btnScan
+id layoutDeviceInfo
+id layoutEnrolled
+id layoutModeSelect
+id tvBackendUrl
+id tvConnectedInfo
+id tvDeviceId
+id tvPollInterval
+id tvSecurityMode
+id tvStatus
+id tvTitle
+id tvVersion
+layout activity_main
+mipmap ic_launcher
+mipmap ic_launcher_round
+string app_name
+string device_admin_description
+string device_admin_label
+xml device_admin

@@ -1,0 +1,38 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.rental.dpc.app-mergeDebugResources-30:/values-v16/values-v16.xml",
+            "map": [
+                {
+                    "source": "/Users/katanyoo/.gradle/caches/9.3.0/transforms/9ebd30e19d89b91393872481ff4c8d0b/transformed/appcompat-1.6.1/res/values-v16/values-v16.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "5",
+                        "endColumns": "12",
+                        "endOffsets": "223"
+                    },
+                    "to": {
+                        "startLines": "3",
+                        "startColumns": "4",
+                        "startOffsets": "121",
+                        "endLines": "6",
+                        "endColumns": "12",
+                        "endOffsets": "289"
+                    }
+                },
+                {
+                    "source": "/Users/katanyoo/.gradle/caches/9.3.0/transforms/a831d571434a1917480b6ad7f3179b90/transformed/core-1.12.0/res/values-v16/values-v16.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "65",
+                        "endOffsets": "116"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp"
+    android:background="#0A0E1A"> <!-- Deep midnight blue background -->
+
+    <!-- App Icon / Shield Logo -->
+    <TextView
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:gravity="center"
+        android:text="🛡️"
+        android:textSize="48sp"
+        android:background="#161B30"
+        android:layout_marginBottom="24dp" />
+
+    <!-- App Name -->
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Rental Device"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:letterSpacing="0.05"
+        android:fontFamily="sans-serif-medium"
+        android:layout_marginBottom="4dp" />
+
+    <!-- Security Tagline -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="SECURED BY RENTAL MDM"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:textColor="#00E5FF"
+        android:letterSpacing="0.2"
+        android:layout_marginBottom="48dp" />
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="พร้อมใช้งาน"
+        android:textSize="16sp"
+        android:textColor="#9EAFCD"
+        android:gravity="center"
+        android:layout_marginBottom="32dp" />
+
+    <!-- Scan QR Button (only visible before enrollment) -->
+    <Button
+        android:id="@+id/btnScan"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="สแกน QR เพื่อเริ่มใช้งาน"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#0A0E1A"
+        android:backgroundTint="#00E5FF"
+        android:layout_marginBottom="24dp"
+        android:visibility="visible" />
+
+    <!-- Mode Selection (shown after QR scan, before enrollment completes) -->
+    <LinearLayout
+        android:id="@+id/layoutModeSelect"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="เลือกระดับความปลอดภัย"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="เลือกก่อนมอบเครื่องให้ลูกค้า"
+            android:textSize="13sp"
+            android:textColor="#9EAFCD"
+            android:gravity="center"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Device Admin Option -->
+        <LinearLayout
+            android:id="@+id/btnModeAdmin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#121829"
+            android:padding="16dp"
+            android:layout_marginBottom="12dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📱 Device Admin — ตั้งค่าง่าย"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✅ ล็อค/ปลดล็อคเครื่อง\n✅ แสดงข้อความหน้าจอ\n❌ ลูกค้า factory reset หลุดได้"
+                android:textSize="12sp"
+                android:textColor="#7A8FA6"
+                android:lineSpacingExtra="4dp" />
+        </LinearLayout>
+
+        <!-- Device Owner Option -->
+        <LinearLayout
+            android:id="@+id/btnModeOwner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#121829"
+            android:padding="16dp"
+            android:layout_marginBottom="24dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🛡️ Device Owner — ปลอดภัยสูงสุด"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✅ ป้องกัน factory reset\n✅ ป้องกัน bootloader\n✅ ซ่อนแอปจากระบบ\n⚠️ ต้องรัน ADB จากคอมพิวเตอร์"
+                android:textSize="12sp"
+                android:textColor="#7A8FA6"
+                android:lineSpacingExtra="4dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Enrolled success message (hidden until enrolled) -->
+    <LinearLayout
+        android:id="@+id/layoutEnrolled"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <!-- Checkmark Status badge -->
+        <TextView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:text="✓"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:textColor="#00E676"
+            android:background="#163020"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="เชื่อมต่อระบบสำเร็จ"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#00E676"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tvConnectedInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="อุปกรณ์นี้ถูกควบคุมดูแลความปลอดภัย\nไม่สามารถลบการติดตั้งแอปได้"
+            android:textSize="13sp"
+            android:textColor="#9EAFCD"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Device info card -->
+        <LinearLayout
+            android:id="@+id/layoutDeviceInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#121829"
+            android:padding="16dp"
+            android:layout_marginBottom="24dp">
+
+            <TextView
+                android:id="@+id/tvDeviceId"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#7A8FA6"
+                android:fontFamily="monospace"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvBackendUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#7A8FA6"
+                android:fontFamily="monospace"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvSecurityMode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#7A8FA6"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvPollInterval"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#7A8FA6"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Footer with Version Name -->
+    <TextView
+        android:id="@+id/tvVersion"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="v1.1"
+        android:textSize="12sp"
+        android:textColor="#4A5A70"
+        android:layout_marginTop="32dp" />
+
+</LinearLayout>

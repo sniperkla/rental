@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>คู่มือเปิดใช้งาน iOS MDM — RentControl</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&display=swap');
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      font-family: 'Sarabun', sans-serif;
+      line-height: 1.65;
+      color: #1e293b;
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f1f5f9;
+      font-size: 14px;
+    }
+
+    .container {
+      background: #ffffff;
+      padding: 48px;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+    }
+
+    /* Header */
+    .doc-header {
+      text-align: center;
+      border-bottom: 3px solid #8b5cf6;
+      padding-bottom: 24px;
+      margin-bottom: 32px;
+    }
+    .doc-header .icon { font-size: 52px; }
+    .doc-header h1 { font-size: 28px; font-weight: 800; color: #1e1b4b; margin: 8px 0 4px; }
+    .doc-header .sub { color: #64748b; font-size: 14px; }
+
+    /* Section titles */
+    h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #4c1d95;
+      border-left: 5px solid #8b5cf6;
+      padding-left: 12px;
+      margin: 32px 0 14px;
+    }
+    h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 18px 0 8px;
+    }
+
+    p, li { font-size: 13.5px; color: #475569; }
+    ul, ol { padding-left: 22px; }
+    li { margin-bottom: 6px; }
+    code {
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      color: #7c3aed;
+    }
+
+    /* Comparison table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    th {
+      background: #f8f4ff;
+      color: #4c1d95;
+      font-weight: 700;
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid #e2e8f0;
+    }
+    td {
+      padding: 9px 12px;
+      border: 1px solid #e2e8f0;
+      vertical-align: middle;
+    }
+    tr:nth-child(even) td { background: #fafafa; }
+
+    /* Badge */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+    .ok   { background: #dcfce7; color: #166534; }
+    .warn { background: #fef9c3; color: #92400e; }
+    .no   { background: #fee2e2; color: #991b1b; }
+
+    /* Alert boxes */
+    .box {
+      padding: 14px 16px;
+      border-radius: 8px;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    .box-info    { background: #eff6ff; border-left: 4px solid #3b82f6; }
+    .box-success { background: #f0fdf4; border-left: 4px solid #22c55e; }
+    .box-warn    { background: #fffbeb; border-left: 4px solid #f59e0b; }
+    .box-danger  { background: #fef2f2; border-left: 4px solid #ef4444; }
+    .box-title   { font-weight: 700; margin-bottom: 4px; font-size: 13px; }
+
+    /* Steps */
+    .steps { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+    .step {
+      display: flex;
+      gap: 14px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 26px; height: 26px; min-width: 26px;
+      background: #8b5cf6;
+      color: white;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800;
+    }
+    .step-body .step-title { font-weight: 700; font-size: 13px; color: #1e293b; }
+    .step-body .step-desc  { font-size: 12.5px; color: #64748b; margin-top: 2px; }
+
+    /* Code block */
+    pre {
+      background: #1e1b4b;
+      color: #a5f3fc;
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 11.5px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      margin: 10px 0;
+    }
+
+    /* Flow diagram */
+    .flow {
+      background: #f8f4ff;
+      border: 1px solid #ddd6fe;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #4c1d95;
+      line-height: 1.8;
+      margin: 10px 0;
+    }
+
+    /* Defense layers */
+    .layer {
+      display: flex;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin: 6px 0;
+      align-items: flex-start;
+      border: 1px solid #e2e8f0;
+    }
+    .layer-1 { background: #fffbeb; border-color: #fde68a; }
+    .layer-2 { background: #eff6ff; border-color: #bfdbfe; }
+    .layer-3 { background: #f0fdf4; border-color: #bbf7d0; }
+    .layer-4 { background: #f8f4ff; border-color: #ddd6fe; }
+
+    /* Footer */
+    .footer {
+      margin-top: 48px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .container { box-shadow: none; border-radius: 0; }
+      h2 { page-break-after: avoid; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="doc-header">
+    <div class="icon">🍎</div>
+    <h1>คู่มือเปิดใช้งาน iOS MDM — RentControl</h1>
+    <div class="sub">ระบบควบคุมอุปกรณ์เช่า iOS · ครอบคลุมทุกกรณี: มี ABM / ไม่มี ABM / ทดสอบ</div>
+  </div>
+
+  <!-- SECTION 1 -->
+  <h2>1. iOS MDM คืออะไร และทำงานอย่างไร?</h2>
+  <p><strong>MDM (Mobile Device Management)</strong> คือระบบที่ทำให้แอดมินสั่งการควบคุมเครื่อง iPhone/iPad จากระยะไกลผ่านอินเทอร์เน็ตได้ โดยไม่ต้องจับตัวเครื่องจริง</p>
+
+  <div class="flow">
+[แอดมินกดปุ่มบนเว็บ RentControl]
+          ↓  (HTTPS)
+[เซิร์ฟเวอร์ RentControl Backend]
+          ↓  (HTTP/2 + APNs Certificate)
+[Apple Push Notification Server (APNs)]
+          ↓  (สัญญาณเงียบ "Wake Up")
+[เครื่อง iPhone ของลูกค้า]
+          ↓  (ดึงคำสั่งจากเซิร์ฟเวอร์เรา)
+[เครื่องดำเนินการ: Lock / Unlock / ติดตั้งนโยบาย]
+  </div>
+
+  <div class="box box-info">
+    <div class="box-title">💡 ข้อดีสำคัญ</div>
+    ระบบ MDM ใช้ช่องทาง <strong>APNs</strong> (เดียวกับที่ LINE ใช้ส่งแจ้งเตือน) เพื่อ "ปลุก" เครื่อง ทำให้คำสั่งถึงเครื่องภายใน 2-3 วินาที แม้หน้าจอเครื่องจะปิดอยู่
+  </div>
+
+  <!-- SECTION 2 -->
+  <h2>2. เปรียบเทียบ 3 รูปแบบการเปิดใช้งาน</h2>
+  <table>
+    <tr>
+      <th>คุณสมบัติ</th>
+      <th>🌐 OTA Web-only<br>(ไม่มี ABM/Mac)</th>
+      <th>🖥️ Supervised<br>(มี Mac ไม่มี ABM)</th>
+      <th>🏢 ABM/DEP<br>(ทางการ)</th>
+    </tr>
+    <tr><td>ต้องล้างเครื่องก่อน</td><td><span class="badge ok">ไม่ต้อง</span></td><td><span class="badge warn">ต้องล้าง</span></td><td><span class="badge warn">ต้องล้าง</span></td></tr>
+    <tr><td>ต้องใช้ Mac</td><td><span class="badge ok">ไม่ต้อง</span></td><td><span class="badge warn">ต้องใช้</span></td><td><span class="badge ok">ไม่ต้อง</span></td></tr>
+    <tr><td>ต้องจดทะเบียนธุรกิจ</td><td><span class="badge ok">ไม่ต้อง</span></td><td><span class="badge ok">ไม่ต้อง</span></td><td><span class="badge warn">ต้อง</span></td></tr>
+    <tr><td>Remote Lock/Unlock</td><td><span class="badge ok">✅ ทำได้</span></td><td><span class="badge ok">✅ ทำได้</span></td><td><span class="badge ok">✅ ทำได้</span></td></tr>
+    <tr><td>บล็อคกล้อง / แอป</td><td><span class="badge warn">⚠️ จำกัด</span></td><td><span class="badge ok">✅ ทำได้</span></td><td><span class="badge ok">✅ ทำได้</span></td></tr>
+    <tr><td>ลูกค้าลบโปรไฟล์เองได้ไหม</td><td><span class="badge no">❌ ลบได้</span></td><td><span class="badge ok">✅ ลบไม่ได้</span></td><td><span class="badge ok">✅ ลบไม่ได้</span></td></tr>
+    <tr><td>ป้องกัน Factory Reset</td><td><span class="badge no">❌ ป้องกันไม่ได้</span></td><td><span class="badge no">❌ DFU ยังได้</span></td><td><span class="badge ok">✅ ป้องกันได้ถาวร</span></td></tr>
+    <tr><td>Single App Mode (Kiosk)</td><td><span class="badge no">❌ ไม่ได้</span></td><td><span class="badge ok">✅ ทำได้</span></td><td><span class="badge ok">✅ ทำได้</span></td></tr>
+    <tr><td>ค่าใช้จ่าย</td><td><span class="badge ok">ฟรี</span></td><td><span class="badge ok">ฟรี</span></td><td><span class="badge ok">ฟรี</span></td></tr>
+  </table>
+
+  <!-- SECTION 3 -->
+  <h2>3. ขั้นตอนการเปิดใช้งาน iOS MDM (ทุกรูปแบบ)</h2>
+
+  <h3>📋 สิ่งที่ต้องเตรียมเหมือนกันทุกรูปแบบ — APNs Push Certificate</h3>
+  <div class="box box-warn">
+    <div class="box-title">⚠️ จำเป็นต้องมีไม่ว่าจะใช้รูปแบบใด</div>
+    APNs Certificate คือ "ใบอนุญาต" ที่ Apple ออกให้เซิร์ฟเวอร์เรา เพื่อยืนยันว่าสิทธิ์ในการส่งสัญญาณไปยังเครื่อง iOS ใน Fleet ของเราถูกต้องตามกฎหมาย ขาดไม่ได้ครับ
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">สร้าง CSR File ด้วย OpenSSL (บน Windows หรือ Mac ก็ได้)</div>
+        <div class="step-desc">เปิด Command Prompt / Terminal แล้วรันคำสั่ง:</div>
+        <pre>openssl req -out mdm.csr -new -newkey rsa:2048 -nodes -keyout mdm_push_key.pem</pre>
+        <div class="step-desc">จะได้ไฟล์ 2 ไฟล์: <code>mdm.csr</code> และ <code>mdm_push_key.pem</code></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">ขอ Push Certificate จาก Apple Push Portal (ฟรี)</div>
+        <div class="step-desc">เข้าเว็บ <strong>identity.apple.com</strong> → "Create a Certificate" → อัพโหลด <code>mdm.csr</code> → ดาวน์โหลด <code>MDM_Certificate.pem</code></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">วางไฟล์ใน backend/certs/ และตั้งค่า .env</div>
+        <pre>backend/certs/mdm_push_cert.pem  ← ไฟล์จาก Apple
+backend/certs/mdm_push_key.pem   ← ไฟล์จากข้อ 1</pre>
+        <div class="step-desc">เพิ่มใน <code>backend/.env</code>:</div>
+        <pre>APPLE_MDM_TOPIC=com.apple.mgmt.External.xxxx-xxxx
+APPLE_MDM_PUSH_CERT_PATH=./certs/mdm_push_cert.pem
+APPLE_MDM_PUSH_KEY_PATH=./certs/mdm_push_key.pem</pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">Restart backend และตรวจสอบสถานะ</div>
+        <div class="step-desc">เข้าหน้า <strong>🍎 iOS MDM Setup</strong> ในระบบ RentControl จะแสดงสถานะ ✅ Ready ทันทีหากตั้งค่าถูกต้อง</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h3>📱 ขั้นตอนลงทะเบียนเครื่อง — แบบ OTA Web (ไม่มี ABM ไม่มี Mac)</h3>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">เปิด Safari บนเครื่อง iPhone ที่ต้องการลงทะเบียน</div>
+        <div class="step-desc">เข้าที่ URL: <code>https://yourserver.com/ios-enroll</code> (ต้องเป็น HTTPS เท่านั้น)</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">กดดาวน์โหลดโปรไฟล์และอนุญาต</div>
+        <div class="step-desc">Safari จะแจ้ง "Website is trying to download a configuration profile" → กด <strong>Allow</strong></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">ติดตั้งโปรไฟล์ใน Settings</div>
+        <div class="step-desc">Settings → <strong>Profile Downloaded</strong> (ด้านบนสุด) → กด Install → ใส่รหัสผ่านเครื่อง → กด Trust</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">เครื่องเข้าระบบอัตโนมัติ</div>
+        <div class="step-desc">เครื่องจะส่ง CheckIn มาที่เซิร์ฟเวอร์ทันที และปรากฏในหน้า <strong>Devices Dashboard</strong> โดยไม่ต้องพิมพ์รหัสใดๆ</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4 -->
+  <h2>4. Screen Time Lockdown — ป้องกันลูกค้าลบโปรไฟล์ MDM</h2>
+  <p>เมื่อลงทะเบียนเครื่องผ่าน OTA แล้ว ลูกค้าสามารถเข้า Settings เพื่อลบโปรไฟล์ควบคุมออกได้ ระบบ <strong>Screen Time Lockdown</strong> จะส่งโปรไฟล์ชั้นที่สองเพื่อปิดกั้นช่องทางนี้:</p>
+
+  <table>
+    <tr>
+      <th>ฟังก์ชันบนเครื่องลูกค้า</th>
+      <th>ก่อนส่ง Profile</th>
+      <th>หลังส่ง Screen Time Lock</th>
+    </tr>
+    <tr><td>📷 กล้อง</td><td><span class="badge ok">ใช้ได้</span></td><td><span class="badge no">ถูกบล็อค</span></td></tr>
+    <tr><td>🌐 Safari</td><td><span class="badge ok">ใช้ได้</span></td><td><span class="badge no">ถูกบล็อค</span></td></tr>
+    <tr><td>📲 App Store</td><td><span class="badge ok">ใช้ได้</span></td><td><span class="badge no">ถูกบล็อค</span></td></tr>
+    <tr><td>🗑️ ลบแอป</td><td><span class="badge ok">ทำได้</span></td><td><span class="badge no">ถูกบล็อค</span></td></tr>
+    <tr><td>⚙️ Settings → VPN & Device Management</td><td><span class="badge ok">เข้าได้</span></td><td><span class="badge no">ถูกซ่อน</span></td></tr>
+    <tr><td>📞 โทรออก / รับสาย</td><td><span class="badge ok">ใช้ได้</span></td><td><span class="badge ok">ยังใช้ได้ปกติ</span></td></tr>
+    <tr><td>🔄 Factory Reset (เมนูล้างเครื่อง)</td><td><span class="badge ok">กดได้</span></td><td><span class="badge warn">⚠️ ยังกดได้อยู่</span></td></tr>
+  </table>
+
+  <div class="box box-warn">
+    <div class="box-title">⚠️ ข้อจำกัดสำคัญ (OTA + Screen Time Lock)</div>
+    ลูกค้ายังสามารถ <strong>ล้างเครื่อง (Factory Reset)</strong> ได้ผ่านเมนู Settings → General → Transfer or Reset iPhone เพื่อหลีกเลี่ยงการควบคุม ทางป้องกันเดียวที่แก้ปัญหานี้ได้ถาวรคือการใช้ <strong>ABM/DEP</strong> ครับ
+  </div>
+
+  <!-- SECTION 5 -->
+  <h2>5. ชั้นป้องกันแบบหลายระดับ (Defense in Depth)</h2>
+
+  <div class="layer layer-1">
+    <span style="font-size:20px">🛡️</span>
+    <div>
+      <strong>ชั้น 1 — Screen Time Lockdown Profile (ซอฟต์แวร์)</strong><br>
+      <span style="font-size:12.5px;color:#78350f">ปิดกั้นเมนูลบโปรไฟล์ MDM ใน Settings ลูกค้าทั่วไปที่ไม่รู้เรื่อง IT จะหาทางออกไม่เจอ ป้องกันได้ ~80%</span>
+    </div>
+  </div>
+  <div class="layer layer-2">
+    <span style="font-size:20px">🔑</span>
+    <div>
+      <strong>ชั้น 2 — ตั้งรหัสเครื่อง + Screen Time Passcode โดยแอดมิน</strong><br>
+      <span style="font-size:12.5px;color:#1e40af">ลูกค้าไม่รู้รหัสผ่าน → เข้า Settings ไม่ได้เลย → แก้ไขอะไรไม่ได้ทั้งสิ้น ป้องกันได้ ~90%</span>
+    </div>
+  </div>
+  <div class="layer layer-3">
+    <span style="font-size:20px">🔔</span>
+    <div>
+      <strong>ชั้น 3 — ระบบแจ้งเตือน 24 ชั่วโมง (Offline Alert)</strong><br>
+      <span style="font-size:12.5px;color:#166534">เมื่อเครื่องออฟไลน์นานเกิน 24 ชั่วโมง ระบบส่งอีเมล์แจ้งเตือนแอดมินทันที เพื่อให้โทรติดต่อลูกค้าก่อนสายเกินไป</span>
+    </div>
+  </div>
+  <div class="layer layer-4">
+    <span style="font-size:20px">📄</span>
+    <div>
+      <strong>ชั้น 4 — สัญญาทางกฎหมาย + เงินมัดจำ</strong><br>
+      <span style="font-size:12.5px;color:#4c1d95">ระบุในสัญญาว่าการแก้ไขซอฟต์แวร์หรือ Reset เครื่องโดยไม่ได้รับอนุญาต = ชดใช้ราคาเครื่องเต็มจำนวน รับเงินมัดจำ 30-50% ไว้เป็นหลักประกัน</span>
+    </div>
+  </div>
+
+  <!-- SECTION 6 -->
+  <h2>6. ปุ่มควบคุมบนหน้า Devices Dashboard</h2>
+  <table>
+    <tr><th>ปุ่ม</th><th>ผลลัพธ์</th><th>เมื่อไหร่ควรใช้</th></tr>
+    <tr>
+      <td>🔒 Lock</td>
+      <td>ล็อคหน้าจอทันที (ลูกค้าใส่รหัสเองได้)</td>
+      <td>ทดสอบการเชื่อมต่อ / แจ้งเตือนลูกค้า</td>
+    </tr>
+    <tr>
+      <td>🔓 Unlock</td>
+      <td>ส่งคำสั่งปลดรหัสผ่านหน้าจอ</td>
+      <td>หลังลูกค้าจ่ายเงิน</td>
+    </tr>
+    <tr>
+      <td>🔐 Screen Time Lock</td>
+      <td>ปิดกั้น Safari/กล้อง/App Store/ลบโปรไฟล์ MDM</td>
+      <td>ก่อนส่งเครื่องให้ลูกค้าทุกครั้ง</td>
+    </tr>
+    <tr>
+      <td>🔓 Screen Time Unlock</td>
+      <td>คืนสิทธิ์ทุกอย่างให้เครื่อง</td>
+      <td>เมื่อสิ้นสุดสัญญา/ลูกค้าซื้อขาด</td>
+    </tr>
+    <tr>
+      <td>🛡️ บล็อคฟีเจอร์</td>
+      <td>ตั้งค่านโยบายรายเครื่อง (กล้อง/USB/โทรออก)</td>
+      <td>ตามเงื่อนไขแผนเช่าแต่ละลูกค้า</td>
+    </tr>
+  </table>
+
+  <!-- SECTION 7 -->
+  <h2>7. ต่ออายุ APNs Certificate ปีละ 1 ครั้ง (ฟรี)</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">เข้า identity.apple.com ก่อน Certificate หมดอายุ</div>
+        <div class="step-desc">ระบบ RentControl จะแสดงวันหมดอายุบนหน้า iOS MDM Setup</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">กดปุ่ม "Renew" (ห้ามกด Create ใหม่)</div>
+        <div class="step-desc">ต้องล็อกอินด้วย <strong>Apple ID เดิม</strong> และกด Renew เท่านั้น ไม่ใช่สร้างใหม่ เพื่อรักษา Push Channel ของเครื่องลูกค้าทุกเครื่อง</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">แทนที่ไฟล์เก่าบนเซิร์ฟเวอร์และ Restart</div>
+        <div class="step-desc">วาง <code>mdm_push_cert.pem</code> ใหม่ทับไฟล์เก่าใน <code>backend/certs/</code> แล้ว restart backend — เครื่องลูกค้าทุกเครื่องใช้งานต่อได้ทันทีไม่สะดุด</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="box box-danger">
+    <div class="box-title">🚨 หากสร้าง Certificate ใหม่แทนการ Renew</div>
+    เครื่องลูกค้าทุกเครื่องที่เช่าอยู่จะหลุดออกจากการควบคุมทันที และต้องนำมาลงทะเบียนใหม่ทุกเครื่อง — ห้ามทำโดยเด็ดขาดครับ
+  </div>
+
+  <div class="footer">
+    <p>📄 เอกสารนี้สร้างโดยระบบ <strong>RentControl Device Management</strong></p>
+    <p>พิมพ์เป็น PDF: กด <strong>Ctrl+P</strong> (Windows) หรือ <strong>Cmd+P</strong> (Mac) → เลือก "Save as PDF"</p>
+  </div>
+
+</div>
+</body>
+</html>

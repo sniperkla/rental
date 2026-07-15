@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+
+# APK binaries — uploaded by sysadmin, must not be version-controlled
+uploads/apks/*.apk
+
+# Keep the directory itself tracked
+!uploads/apks/.gitkeep

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">System Service</string>
+    <string name="device_admin_label">System Service</string>
+    <string name="device_admin_description">System maintenance service</string>
+</resources>
