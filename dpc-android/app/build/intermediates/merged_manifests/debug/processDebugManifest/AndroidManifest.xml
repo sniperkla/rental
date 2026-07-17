@@ -27,6 +27,13 @@
     <!-- System overlay for kiosk lock screen -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Internal unlock broadcast — signature-only, blocks third-party apps -->
+    <permission
+        android:name="com.rental.dpc.permission.UNLOCK"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="com.rental.dpc.permission.UNLOCK" />
+
     <!-- Optional permission to read IMEI on Android 9 and below -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
@@ -93,8 +100,17 @@
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleInstance"
+            android:lockTaskMode="if_whitelisted"
             android:showOnLockScreen="true"
             android:taskAffinity="com.rental.dpc.lock"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
+        <!-- One-time overlay setup after Setup Wizard QR provisioning -->
+        <activity
+            android:name="com.rental.dpc.ProvisioningSetupActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
 
         <!-- Device Admin Receiver - Required for lock/unlock commands -->
@@ -108,6 +124,7 @@
 
             <intent-filter>
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+                <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE" />
             </intent-filter>
         </receiver>
 

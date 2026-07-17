@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import kotlinx.coroutines.*
 import okhttp3.*
@@ -48,10 +49,38 @@ class DpcPollingService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pollingJob: Job? = null
 
+    // ContentObserver to detect Developer Options / ADB changes in real-time
+    private val devSettingsObserver = object : android.database.ContentObserver(android.os.Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+            if (!dpm.isDeviceOwnerApp(packageName)) return
+
+            val devEnabled = android.provider.Settings.Global.getInt(
+                contentResolver, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0
+            ) != 0
+            val adbEnabled = android.provider.Settings.Global.getInt(
+                contentResolver, android.provider.Settings.Global.ADB_ENABLED, 0
+            ) != 0
+
+            if (devEnabled || adbEnabled) {
+                Log.w(TAG, "⚠️ Developer Options/ADB enabled — disabling immediately")
+                try {
+                    val admin = android.content.ComponentName(this@DpcPollingService, DpcAdminReceiver::class.java)
+                    dpm.setGlobalSetting(admin, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, "0")
+                    dpm.setGlobalSetting(admin, android.provider.Settings.Global.ADB_ENABLED, "0")
+                    Log.i(TAG, "✅ Developer Options/ADB disabled via ContentObserver")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to disable Dev Options: ${e.message}")
+                }
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("MDM Agent running..."))
+        registerDevSettingsObserver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -62,8 +91,25 @@ class DpcPollingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        contentResolver.unregisterContentObserver(devSettingsObserver)
         serviceScope.cancel()
         super.onDestroy()
+    }
+
+    private fun registerDevSettingsObserver() {
+        try {
+            val uri = android.provider.Settings.Global.getUriFor(
+                android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED
+            )
+            contentResolver.registerContentObserver(uri, false, devSettingsObserver)
+            val adbUri = android.provider.Settings.Global.getUriFor(
+                android.provider.Settings.Global.ADB_ENABLED
+            )
+            contentResolver.registerContentObserver(adbUri, false, devSettingsObserver)
+            Log.i(TAG, "Developer Options/ADB ContentObserver registered")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register ContentObserver: ${e.message}")
+        }
     }
 
     /**
@@ -77,7 +123,7 @@ class DpcPollingService : Service() {
         try { LockOverlayService.stop(this) } catch (_: Exception) {}
 
         // Dismiss lock activity if showing
-        sendBroadcast(android.content.Intent(LockActivity.ACTION_UNLOCK))
+        sendBroadcast(android.content.Intent(LockActivity.ACTION_UNLOCK), LockActivity.UNLOCK_PERMISSION)
 
         // Clear all stored credentials
         Prefs.clear(this)
@@ -213,7 +259,7 @@ class DpcPollingService : Service() {
                 Prefs.setLockReason(this, "")
                 Prefs.setDevOptionsWarningShown(this, false) // Reset warning flag
                 dismissDevOptionsWarning(this@DpcPollingService) // Dismiss warning notification
-                sendBroadcast(android.content.Intent(LockActivity.ACTION_UNLOCK))
+                sendBroadcast(android.content.Intent(LockActivity.ACTION_UNLOCK), LockActivity.UNLOCK_PERMISSION)
             }
         }
     }
@@ -249,6 +295,18 @@ class DpcPollingService : Service() {
         val deviceId   = Prefs.getDeviceId(ctx)
         val apiKey     = Prefs.getApiKey(ctx)
         val backendUrl = Prefs.getBackendUrl(ctx)
+
+        // Fallback: if overlay setup is pending, launch ProvisioningSetupActivity
+        if (Prefs.isOverlaySetupPending(ctx) && !OverlayPermissionHelper.canDrawOverlays(ctx)) {
+            Log.i(TAG, "Overlay setup pending — launching ProvisioningSetupActivity")
+            val intent = android.content.Intent(ctx, ProvisioningSetupActivity::class.java).apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try { startActivity(intent) } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch ProvisioningSetupActivity: ${e.message}")
+            }
+            return
+        }
 
         if (deviceId.isBlank() || apiKey.isBlank() || backendUrl.isBlank()) {
             Log.w(TAG, "Not enrolled — skipping poll")
@@ -297,6 +355,12 @@ class DpcPollingService : Service() {
         // Update poll interval if server suggests a new one
         val newInterval = json.optInt("pollingIntervalSeconds", 30)
         Prefs.save(ctx, deviceId, apiKey, backendUrl, newInterval)
+
+        // Sync recovery code hash from server (set when admin configures device-owner mode)
+        val recoveryHash = json.optString("recoveryCodeHash", "")
+        if (recoveryHash.isNotBlank() && recoveryHash != "null") {
+            Prefs.setRecoveryCodeHash(ctx, recoveryHash)
+        }
 
         // Execute each pending command
         val commands = json.optJSONArray("commands") ?: return

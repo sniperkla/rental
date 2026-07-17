@@ -35,6 +35,7 @@ class LockActivity : Activity() {
 
     companion object {
         const val ACTION_UNLOCK = "com.rental.dpc.ACTION_UNLOCK"
+        const val UNLOCK_PERMISSION = "com.rental.dpc.permission.UNLOCK"
 
         fun start(context: Context) {
             val intent = Intent(context, LockActivity::class.java).apply {
@@ -54,6 +55,7 @@ class LockActivity : Activity() {
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ACTION_UNLOCK) {
+                LockTaskHelper.stopLockTask(this@LockActivity)
                 finish()
             }
         }
@@ -63,6 +65,7 @@ class LockActivity : Activity() {
         super.onCreate(savedInstanceState)
         applyWindowFlags()
         buildUI()
+        LockTaskHelper.startLockTask(this)
         BroadcastCompat.registerInternalReceiver(this, unlockReceiver, IntentFilter(ACTION_UNLOCK))
     }
 
@@ -192,6 +195,41 @@ class LockActivity : Activity() {
             setPadding(0, 12, 0, 0)
         })
 
+        // ── Dismiss button for dev_options / usb_debug ─────────────────────
+        if (reason == "dev_options" || reason == "usb_debug") {
+            root.addView(android.widget.Button(this).apply {
+                text = "ไปปิด Developer Options"
+                textSize = 14f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#2196F3"))
+                setPadding(32, 16, 32, 16)
+
+                setOnClickListener {
+                    // Reset warning so polling shows warning again before re-locking
+                    Prefs.setDevOptionsWarningShown(this@LockActivity, false)
+                    Prefs.setDeviceLocked(this@LockActivity, false)
+                    Prefs.setLockReason(this@LockActivity, "")
+                    Prefs.setAdbBlocked(this@LockActivity, false)
+
+                    // Dismiss lock screen
+                    sendBroadcast(Intent(ACTION_UNLOCK), UNLOCK_PERMISSION)
+
+                    // Open Developer Options settings
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } catch (_: Exception) {
+                        // Fallback: open general settings
+                        startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    }
+                    finish()
+                }
+            })
+        }
+
         // ── Recovery Code Input (only visible after 2+ hours offline) ──────
         if (shouldShowRecoveryCode()) {
             root.addView(TextView(this).apply {
@@ -265,7 +303,7 @@ class LockActivity : Activity() {
                         Prefs.setDeviceLocked(this@LockActivity, false)
                         Prefs.setLockReason(this@LockActivity, "")
                         Prefs.setRecoveryUnlocked(this@LockActivity) // 24h cooldown
-                        sendBroadcast(Intent(ACTION_UNLOCK))
+                        sendBroadcast(Intent(ACTION_UNLOCK), UNLOCK_PERMISSION)
                         finish()
                     } else {
                         // Failed — increment attempts
@@ -338,7 +376,10 @@ class LockActivity : Activity() {
     }
 
     override fun onUserLeaveHint() {
-        // Home button pressed. LockOverlayService will block interaction.
+        // Without overlay permission, re-launch lock screen when user presses Home.
+        if (!LockOverlayService.canDrawOverlays(this)) {
+            handler.postDelayed({ start(this) }, 200)
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

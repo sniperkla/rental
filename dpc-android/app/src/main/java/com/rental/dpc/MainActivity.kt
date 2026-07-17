@@ -47,6 +47,10 @@ import java.util.concurrent.TimeUnit
  */
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_SETUP_OVERLAY = "setup_overlay"
+    }
+
     private val TAG = "MainActivity"
 
     private val dpm by lazy { getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager }
@@ -89,7 +93,7 @@ class MainActivity : AppCompatActivity() {
         showEnrolledState()
     }
 
-    // System overlay permission launcher — removed: LockActivity needs no overlay permission
+    private var pendingOverlaySetup = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,12 +113,25 @@ class MainActivity : AppCompatActivity() {
 
         btnScan.setOnClickListener { startQrScan() }
 
+        if (intent.getBooleanExtra(EXTRA_SETUP_OVERLAY, false)) {
+            pendingOverlaySetup = true
+            showOverlaySetupState()
+            return
+        }
+
         // Restore correct UI state
         if (Prefs.isEnrolled(this)) {
             // Check if device is actually configured by admin before showing enrolled state
             checkBackendConfigAndShowState()
         } else {
             showScanState()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (pendingOverlaySetup && OverlayPermissionHelper.canDrawOverlays(this)) {
+            completeOverlaySetup()
         }
     }
 
@@ -366,11 +383,20 @@ class MainActivity : AppCompatActivity() {
                                     if (securityMode == "device-owner") {
                                         // Check if Device Owner is actually set via ADB
                                         if (dpm.isDeviceOwnerApp(packageName)) {
-                                            DpcAdminReceiver().applyDeviceOwnerPolicies(this@MainActivity)
+                                            val overlayGranted = OverlayPermissionHelper.canDrawOverlays(this@MainActivity)
+                                            DpcAdminReceiver().applyDeviceOwnerPolicies(
+                                                this@MainActivity,
+                                                hideFromLauncher = overlayGranted
+                                            )
                                             configPolling = false
-                                            setStatus("Device Owner พร้อมใช้งาน!")
-                                            showEnrolledState()
-                                            Toast.makeText(this@MainActivity, "Device Owner พร้อมใช้งาน!", Toast.LENGTH_SHORT).show()
+                                            if (overlayGranted) {
+                                                setStatus("Device Owner พร้อมใช้งาน!")
+                                                showEnrolledState()
+                                                Toast.makeText(this@MainActivity, "Device Owner พร้อมใช้งาน!", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                pendingOverlaySetup = true
+                                                showOverlaySetupState()
+                                            }
                                         } else {
                                             setStatus("Device Owner — กำลังรอ ADB activation...")
                                         }
@@ -410,6 +436,65 @@ class MainActivity : AppCompatActivity() {
                 "จำเป็นสำหรับระบบจัดการอุปกรณ์จากร้านเช่า เพื่อรักษาความปลอดภัยของอุปกรณ์")
         }
         adminLauncher.launch(intent)
+    }
+
+    // ── Overlay Setup (one-time, before app is hidden) ───────────────────────
+
+    private fun showOverlaySetupState() {
+        btnScan.visibility = View.GONE
+        layoutEnrolled.visibility = View.GONE
+        layoutModeSelect.visibility = View.VISIBLE
+        layoutModeSelect.removeAllViews()
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(32, 32, 32, 32)
+        }
+
+        container.addView(TextView(this).apply {
+            text = "🖥️"
+            textSize = 48f
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 16)
+        })
+
+        container.addView(TextView(this).apply {
+            text = "เปิดสิทธิ์แสดงทับแอปอื่น"
+            textSize = 20f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(0xFF00E676.toInt())
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 8)
+        })
+
+        container.addView(TextView(this).apply {
+            text = "จำเป็นสำหรับหน้าจอล็อคเต็มจอเมื่อแอดมินสั่งล็อคเครื่อง\n\n" +
+                    "1. กดปุ่มด้านล่าง\n" +
+                    "2. เปิด \"Allow display over other apps\" / \"อนุญาตให้แสดงทับแอปอื่น\"\n" +
+                    "3. กลับมาที่แอปนี้ — ระบบจะตรวจสอบอัตโนมัติ"
+            textSize = 14f
+            setTextColor(0xFF9EAFCD.toInt())
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 24)
+            setLineSpacing(6f, 1f)
+        })
+
+        container.addView(Button(this).apply {
+            text = "เปิดการตั้งค่าสิทธิ์"
+            setOnClickListener { OverlayPermissionHelper.openOverlaySettings(this@MainActivity) }
+        })
+
+        layoutModeSelect.addView(container)
+        setStatus("กรุณาเปิดสิทธิ์ Display over other apps")
+    }
+
+    private fun completeOverlaySetup() {
+        pendingOverlaySetup = false
+        DpcAdminReceiver().hideFromLauncher(this)
+        setStatus("Device Owner พร้อมใช้งาน!")
+        showEnrolledState()
+        Toast.makeText(this, "Overlay permission granted — setup complete!", Toast.LENGTH_SHORT).show()
     }
 
     // ── UI State ─────────────────────────────────────────────────────────────

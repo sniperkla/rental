@@ -19,6 +19,7 @@ object Prefs {
     private const val KEY_LAST_POLL_SUCCESS = "last_poll_success_ms"
     private const val KEY_OFFLINE_LOCK_ENABLED = "offline_lock_enabled"
     private const val KEY_TEST_MODE_ENABLED = "test_mode_enabled"
+    private const val KEY_ENROLLED_AT = "enrolled_at_ms"
     private const val KEY_DEVICE_LOCKED = "device_locked"
     private const val KEY_SECURITY_MODE = "security_mode"
     private const val KEY_ADMIN_WAS_ACTIVE = "admin_was_ever_active"
@@ -30,12 +31,15 @@ object Prefs {
         get(ctx).contains(KEY_DEVICE_ID)
 
     fun save(ctx: Context, deviceId: String, apiKey: String, backendUrl: String, pollInterval: Int) {
-        get(ctx).edit()
+        val editor = get(ctx).edit()
             .putString(KEY_DEVICE_ID, deviceId)
             .putString(KEY_API_KEY, apiKey)
             .putString(KEY_BACKEND_URL, backendUrl)
             .putInt(KEY_POLL_INTERVAL, pollInterval)
-            .apply()
+        if (!get(ctx).contains(KEY_ENROLLED_AT)) {
+            editor.putLong(KEY_ENROLLED_AT, System.currentTimeMillis())
+        }
+        editor.apply()
     }
 
     fun getDeviceId(ctx: Context): String = get(ctx).getString(KEY_DEVICE_ID, "") ?: ""
@@ -79,7 +83,12 @@ object Prefs {
 
     /** Returns how many milliseconds since the last successful poll. */
     fun msSinceLastPoll(ctx: Context): Long {
-        val last = get(ctx).getLong(KEY_LAST_POLL_SUCCESS, System.currentTimeMillis())
+        val prefs = get(ctx)
+        val last = if (prefs.contains(KEY_LAST_POLL_SUCCESS)) {
+            prefs.getLong(KEY_LAST_POLL_SUCCESS, 0)
+        } else {
+            prefs.getLong(KEY_ENROLLED_AT, System.currentTimeMillis())
+        }
         return System.currentTimeMillis() - last
     }
 
@@ -168,6 +177,20 @@ object Prefs {
 
     fun getRecoveryCooldownUntil(ctx: Context): Long =
         get(ctx).getLong(KEY_RECOVERY_COOLDOWN_UNTIL, 0)
+
+    // ── Overlay Setup Pending ───────────────────────────────────────────────
+    private const val KEY_OVERLAY_SETUP_PENDING = "overlay_setup_pending"
+
+    fun setOverlaySetupPending(ctx: Context, pending: Boolean) {
+        get(ctx).edit().putBoolean(KEY_OVERLAY_SETUP_PENDING, pending).apply()
+    }
+
+    fun isOverlaySetupPending(ctx: Context): Boolean =
+        get(ctx).getBoolean(KEY_OVERLAY_SETUP_PENDING, false)
+
+    fun clearOverlaySetupPending(ctx: Context) {
+        get(ctx).edit().remove(KEY_OVERLAY_SETUP_PENDING).apply()
+    }
 
     fun clear(ctx: Context) = get(ctx).edit().clear().apply()
 }

@@ -14,6 +14,9 @@ export enum MdmCommandType {
   UPDATE_CONFIG = 'UPDATE_CONFIG',
   PUSH_MESSAGE = 'PUSH_MESSAGE',
   UNENROLL = 'UNENROLL',   // Deactivates Device Admin so DPC can be uninstalled
+  RESTRICT = 'RESTRICT',     // Add UserManager restrictions
+  UNRESTRICT = 'UNRESTRICT', // Remove UserManager restrictions
+  RESTORE_SYSTEM_APPS = 'RESTORE_SYSTEM_APPS', // Force-install system apps
 }
 
 export enum MdmCommandStatus {
@@ -44,6 +47,8 @@ export class MdmCommand {
    *   LOCK/UNLOCK → {}
    *   PUSH_MESSAGE → { title: '...', body: '...' }
    *   UPDATE_CONFIG → { pollingIntervalSeconds: 15 }
+   *   RESTRICT → { restrictions: ['no_factory_reset', 'no_safe_boot', ...] }
+   *   UNRESTRICT → { restrictions: ['no_factory_reset', 'no_safe_boot', ...] }
    */
   @Prop({ type: Object, default: {} })
   payload: Record<string, any>;

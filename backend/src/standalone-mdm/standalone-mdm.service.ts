@@ -225,13 +225,11 @@ export class StandaloneMdmService {
         serialNumber:             dto.androidId,
         imei:                     dto.imei || '',
         platform:                 DevicePlatform.ANDROID,
-        status:                   DeviceStatus.AVAILABLE,
+        status:                   DeviceStatus.PENDING,
         managementTrack:          'standalone',
         standaloneDeviceId,
         standaloneApiKeyHash:     hashedApiKey,
         standalonePollingInterval: pollingInterval,
-        securityMode:             dto.securityMode || 'device-admin',
-        configuredAt:             new Date(),
         dailyRate:                0,
         monthlyRate:              0,
       } as any);
@@ -253,9 +251,8 @@ export class StandaloneMdmService {
           brand:  dto.brand,
           model:  dto.model,
           imei:   dto.imei || (device as any).imei || '',
-          status: DeviceStatus.AVAILABLE,
-          securityMode: dto.securityMode || (device as any).securityMode || 'device-admin',
-          configuredAt: new Date(),
+          status: DeviceStatus.PENDING,
+          $unset: { configuredAt: 1, securityMode: 1 },
         } as any,
         { new: true },
       );
@@ -316,6 +313,18 @@ export class StandaloneMdmService {
       // Always set explicitly so the $gt filter in processPoll never misses it
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
+
+     // Persist restriction state for standalone devices
+     if (device.managementTrack === 'standalone' && (dto.commandType === MdmCommandType.RESTRICT || dto.commandType === MdmCommandType.UNRESTRICT)) {
+       const keys: string[] = dto.payload?.restrictions ?? [];
+       if (dto.commandType === MdmCommandType.RESTRICT) {
+         const merged = [...new Set([...(device.standaloneRestrictions ?? []), ...keys])];
+         await this.devicesService.model.findByIdAndUpdate(dto.deviceId, { standaloneRestrictions: merged });
+       } else {
+         const remaining = (device.standaloneRestrictions ?? []).filter(k => !keys.includes(k));
+         await this.devicesService.model.findByIdAndUpdate(dto.deviceId, { standaloneRestrictions: remaining });
+       }
+     }
 
      if (device.managementTrack === 'standalone') {
        this.logger.log(`⏳ Command ${dto.commandType} queued (PENDING) for standalone device: ${device.name}`);
@@ -510,11 +519,13 @@ export class StandaloneMdmService {
     }
 
     const config = await this.configModel.findOne({ device: device._id }).lean();
+    const recoveryCodeHash = (device as any).recoveryCodeHash as string | undefined;
 
     return {
       deviceName: device.name,
       serverTime: now.toISOString(),
       pollingIntervalSeconds: config?.pollingIntervalSeconds ?? device.standalonePollingInterval ?? 30,
+      recoveryCodeHash: recoveryCodeHash || null,
       commands: pendingCommands.map(c => ({
         commandId: c.commandId,
         commandType: c.commandType,
@@ -557,6 +568,7 @@ export class StandaloneMdmService {
       // Device has been unenrolled — clear standalone enrollment data
       const updated = await this.devicesService.model.findByIdAndUpdate(device._id, {
         $unset: { standaloneDeviceId: 1, standaloneApiKeyHash: 1, standalonePollingInterval: 1 },
+        standaloneRestrictions: [],
         status: DeviceStatus.AVAILABLE,
         managementTrack: 'cloud',
       }, { new: true });

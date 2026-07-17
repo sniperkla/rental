@@ -52,7 +52,7 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
      * Apply Device Owner policies if app is set as Device Owner.
      * Called on activation and on boot.
      */
-    fun applyDeviceOwnerPolicies(context: Context) {
+    fun applyDeviceOwnerPolicies(context: Context, hideFromLauncher: Boolean = true) {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val admin = ComponentName(context, DpcAdminReceiver::class.java)
 
@@ -61,11 +61,11 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
             return
         }
 
-        Log.i(TAG, "🛡️ Device Owner detected — applying security policies")
+        Log.i(TAG, "🛡️ Device Owner detected — applying security policies (hideLauncher=$hideFromLauncher)")
 
         try {
-            // Allow factory reset (clearing any previously set restriction)
-            dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_FACTORY_RESET)
+            // Block factory reset — customer must not wipe MDM to bypass lock
+            // TODO: Re-enable after testing. dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_FACTORY_RESET)
 
             // Block safe boot (prevents bypassing via safe mode)
             dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_SAFE_BOOT)
@@ -73,37 +73,46 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
             // Block OEM Unlocking (prevents bootloader unlocking via Developer Options)
             dpm.addUserRestriction(admin, "no_oem_unlock")
 
-            // Block Developer Options / ADB (prevents tapping 7 times on build number)
-            // NOTE: Admin can still remove Device Owner via backend "Remove MDM" command
-            dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
-            dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_CONFIG_WIFI)
-            dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_SHARE_LOCATION)
-            
+            // Block Developer Options / ADB via global settings (does NOT block camera)
             disableDeveloperMode(dpm, admin)
 
             // Block uninstall
             dpm.setUninstallBlocked(admin, context.packageName, true)
 
-            // SYSTEM_ALERT_WINDOW is a special app-op permission. Android does not
-            // allow a DPC to silently grant it with setPermissionGrantState().
-            // The reliable managed-device lock path is LockActivity; overlay is optional.
             Log.i(
                 TAG,
                 "Overlay permission state: canDraw=${android.provider.Settings.canDrawOverlays(context)}"
             )
 
-            // Hide app from launcher (prevents user from finding it in app drawer)
-            val launcherComponent = ComponentName(context, MainActivity::class.java)
-            context.packageManager.setComponentEnabledSetting(
-                launcherComponent,
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.DONT_KILL_APP
-            )
+            // Re-enable camera — may have been disabled by a previous lockdown that wasn't cleared
+            if (!Prefs.isDeviceLocked(context)) {
+                dpm.setCameraDisabled(admin, false)
+                Log.i(TAG, "Camera re-enabled (not in active lock)")
+            }
 
-            Log.i(TAG, "✅ Device Owner policies applied: factory reset blocked, app hidden")
+            // Lock Task Mode works without overlay permission (required for QR provisioning)
+            LockTaskHelper.configure(context)
+
+            if (hideFromLauncher) {
+                hideFromLauncher(context)
+            } else {
+                Log.i(TAG, "Keeping app visible in launcher until overlay permission is granted")
+            }
+
+            Log.i(TAG, "✅ Device Owner policies applied")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to apply Device Owner policies: ${e.message}")
         }
+    }
+
+    fun hideFromLauncher(context: Context) {
+        val launcherComponent = ComponentName(context, MainActivity::class.java)
+        context.packageManager.setComponentEnabledSetting(
+            launcherComponent,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP
+        )
+        Log.i(TAG, "App hidden from launcher")
     }
 
     private fun disableDeveloperMode(dpm: DevicePolicyManager, admin: ComponentName) {
@@ -134,8 +143,11 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
     override fun onProfileProvisioningComplete(context: Context, intent: Intent) {
         Log.i(TAG, "🎉 onProfileProvisioningComplete — Setup Wizard provisioning complete!")
 
-        // Apply DO policies immediately since we are now Device Owner
-        applyDeviceOwnerPolicies(context)
+        // Apply DO policies but keep app visible — overlay is not yet granted during Setup Wizard
+        applyDeviceOwnerPolicies(context, hideFromLauncher = false)
+
+        // Restore system apps in background (don't block registration)
+        Thread { restoreSystemApps(context) }.start()
 
         // Extract the extras bundle passed via the QR payload (It's a PersistableBundle in Android!)
         val extras = intent.getParcelableExtra(DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE) as? android.os.PersistableBundle
@@ -144,7 +156,6 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
 
         if (!registrationToken.isNullOrBlank() && !backendUrl.isNullOrBlank()) {
             Log.i(TAG, "Found registration token — auto-registering with backend: $backendUrl")
-            // Mark admin as active before starting registration
             Prefs.setAdminWasEverActive(context)
 
             ApiHelper.selfRegister(
@@ -153,25 +164,231 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
                 backendUrl = backendUrl,
                 onSuccess = { deviceId, _ ->
                     Log.i(TAG, "✅ Auto-registration via Setup Wizard complete! deviceId=${deviceId.take(8)}...")
-                    // Show success notification on the phone
                     showProvisioningSuccessNotification(context)
+                    launchOverlaySetup(context)
                 },
                 onError = { msg ->
                     Log.e(TAG, "Auto-registration failed during provisioning: $msg")
-                    // On failure, start MainActivity so the user can manually scan a QR code
-                    val launchIntent = Intent(context, MainActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(launchIntent)
+                    launchOverlaySetup(context)
                 }
             )
         } else {
-            Log.w(TAG, "No registration token in provisioning extras — launching MainActivity for manual setup")
-            val launchIntent = Intent(context, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(launchIntent)
+            Log.w(TAG, "No registration token in provisioning extras — launching overlay setup")
+            launchOverlaySetup(context)
         }
+    }
+
+    /**
+     * Restore system apps that were skipped during QR provisioning.
+     * Uses `pm install-existing` to force-install from system partition,
+     * and re-enables any disabled system apps.
+     */
+    private fun restoreSystemApps(context: Context) {
+        try {
+            // Common system app packages across all brands
+            val systemPackages = listOf(
+                // ── AOSP (all Android) ──
+                "com.android.camera",           // Camera
+                "com.android.gallery3d",        // Gallery
+                "com.android.chrome",           // Chrome
+                "com.android.settings",         // Settings
+                "com.android.phone",            // Phone
+                "com.android.contacts",         // Contacts
+                "com.android.mms",              // Messages
+                "com.android.deskclock",        // Clock
+                "com.android.calendar",         // Calendar
+                "com.android.documentsui",      // Files
+                "com.android.vending",          // Google Play Store
+                "com.android.calculator2",      // Calculator
+                "com.android.soundrecorder",    // Sound Recorder
+                "com.android.fmradio",          // FM Radio
+
+                // ── Google ──
+                "com.google.android.apps.maps", // Google Maps
+                "com.google.android.youtube",   // YouTube
+                "com.google.android.gm",        // Gmail
+                "com.google.android.apps.photos", // Google Photos
+
+                // ── Samsung ──
+                "com.samsung.android.camera",   // Samsung Camera
+                "com.samsung.android.gallery",  // Samsung Gallery
+                "com.samsung.android.app.calculator", // Samsung Calculator
+                "com.samsung.android.calendar", // Samsung Calendar
+                "com.samsung.android.contacts", // Samsung Contacts
+                "com.samsung.android.messaging", // Samsung Messages
+                "com.samsung.android.app.clock", // Samsung Clock
+                "com.samsung.android.incallui", // Samsung Phone
+                "com.samsung.android.dialer",   // Samsung Dialer
+                "com.samsung.android.forest",   // Samsung Notes
+                "com.samsung.android.app.notes", // Samsung Notes
+                "com.sec.android.app.camera",   // Samsung Camera (alt)
+                "com.sec.android.gallery3d",    // Samsung Gallery (alt)
+                "com.sec.android.app.clockpackage", // Samsung Clock (alt)
+                "com.sec.android.app.popupcalculator", // Samsung Calculator (alt)
+
+                // ── Xiaomi / Redmi / POCO ──
+                "com.miui.camera",              // Camera
+                "com.miui.gallery",             // Gallery
+                "com.miui.player",              // Music
+                "com.miui.video",               // Video
+                "com.miui.calculator",          // Calculator
+                "com.miui.compass",             // Compass
+                "com.miui.weather2",            // Weather
+                "com.miui.notes",               // Notes
+                "com.miui.fm",                  // FM Radio
+
+                // ── OPPO / Realme ──
+                "com.oppo.camera",              // OPPO Camera
+                "com.coloros.gallery3d",        // OPPO Gallery
+                "com.coloros.calculator",       // OPPO Calculator
+                "com.coloros.weather2",         // OPPO Weather
+                "com.coloros.notes",            // OPPO Notes
+                "com.oppo.music",               // OPPO Music
+                "com.oppo.video",               // OPPO Video
+
+                // ── Vivo ──
+                "com.vivo.camera",              // Vivo Camera
+                "com.vivo.gallery",             // Vivo Gallery
+                "com.vivo.calculator",          // Vivo Calculator
+                "com.vivo.weather",             // Vivo Weather
+                "com.vivo.notes",               // Vivo Notes
+                "com.vivo.music",               // Vivo Music
+
+                // ── Huawei / Honor ──
+                "com.huawei.camera",            // Huawei Camera
+                "com.huawei.gallery",           // Huawei Gallery
+                "com.huawei.calculator",        // Huawei Calculator
+                "com.huawei.notes",             // Huawei Notes
+                "com.honor.camera",             // Honor Camera
+
+                // ── OnePlus ──
+                "com.oneplus.camera",           // OnePlus Camera
+                "com.oneplus.gallery",          // OnePlus Gallery
+                "com.oneplus.calculator",       // OnePlus Calculator
+
+                // ── Motorola ──
+                "com.motorola.camera",          // Motorola Camera
+                "com.motorola.gallery",         // Motorola Gallery
+                "com.motorola.calculator",      // Motorola Calculator
+                "com.mot.camera",               // Motorola Camera (alt)
+
+                // ── Lenovo ──
+                "com.lenovo.camera",            // Lenovo Camera
+                "com.lenovo.gallery",           // Lenovo Gallery
+
+                // ── ASUS ──
+                "com.asus.camera",              // ASUS Camera
+                "com.asus.gallery",             // ASUS Gallery
+                "com.asus.calculator",          // ASUS Calculator
+
+                // ── Sony ──
+                "com.sonymobile.camera",        // Sony Camera
+                "com.sonyericsson.gallery",     // Sony Gallery
+
+                // ── LG ──
+                "com.lge.camera",               // LG Camera
+                "com.lge.gallery",              // LG Gallery
+                "com.lge.calculator",           // LG Calculator
+
+                // ── Tecno ──
+                "com.transsion.camera",         // Tecno Camera
+                "com.transsion.gallery",        // Tecno Gallery
+                "com.transsion.calculator",     // Tecno Calculator
+
+                // ── Infinix ──
+                "com.infinix.camera",           // Infinix Camera
+                "com.infinix.gallery",          // Infinix Gallery
+
+                // ── itel ──
+                "com.itel.camera",              // itel Camera
+                "com.itel.gallery",             // itel Gallery
+
+                // ── Nokia ──
+                "com.nokia.camera",             // Nokia Camera
+                "com.nokia.gallery",            // Nokia Gallery
+
+                // ── ZTE ──
+                "com.zte.camera",               // ZTE Camera
+                "com.zte.gallery",              // ZTE Gallery
+
+                // ── iQOO / Poco (sub-brands) ──
+                "com.iqoo.camera",              // iQOO Camera
+                "com.poco.camera",              // POCO Camera
+
+                // ── Nothing ──
+                "com.nothing.camera",           // Nothing Camera
+
+                // ── Meizu ──
+                "com.meizu.media.camera",       // Meizu Camera
+                "com.meizu.media.gallery",      // Meizu Gallery
+
+                // ── Coolpad ──
+                "com.coolpad.camera",           // Coolpad Camera
+                "com.coolpad.gallery",          // Coolpad Gallery
+
+                // ── Alcatel ──
+                "com.tcl.camera",               // Alcatel/TCL Camera
+                "com.tcl.gallery",              // Alcatel/TCL Gallery
+            )
+
+            val pm = context.packageManager
+            var restored = 0
+
+            // Re-enable known system apps and any disabled system apps
+            for (pkg in systemPackages) {
+                try {
+                    pm.getPackageInfo(pkg, 0) // Check if package exists
+                    val state = pm.getApplicationEnabledSetting(pkg)
+                    if (state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER ||
+                        state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED ||
+                        state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+                        pm.setApplicationEnabledSetting(pkg, android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, 0)
+                        restored++
+                        Log.i(TAG, "Re-enabled: $pkg")
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // Also re-enable any other disabled system apps
+            val packages = pm.getInstalledApplications(android.content.pm.PackageManager.GET_META_DATA)
+            for (appInfo in packages) {
+                if (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0) {
+                    try {
+                        val state = pm.getApplicationEnabledSetting(appInfo.packageName)
+                        if (state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER ||
+                            state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED ||
+                            state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+                            pm.setApplicationEnabledSetting(appInfo.packageName, android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, 0)
+                            restored++
+                            Log.i(TAG, "Re-enabled system app: ${appInfo.packageName}")
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+
+            Log.i(TAG, "System app restoration: $restored apps re-enabled")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to restore system apps: ${e.message}")
+        }
+    }
+
+    private fun launchOverlaySetup(context: Context) {
+        Log.i(TAG, "launchOverlaySetup — scheduling via AlarmManager")
+        // Save flag so the app knows to show overlay setup when it opens
+        Prefs.setOverlaySetupPending(context, true)
+
+        // Use AlarmManager to launch activity after 2s — works even if process is killed
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        val intent = Intent(context, ProvisioningSetupActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            context, 9999, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        val triggerTime = android.os.SystemClock.elapsedRealtime() + 5000
+        alarmManager.set(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerTime, pendingIntent)
+        Log.i(TAG, "AlarmManager scheduled for 5s from now")
     }
 
     private fun showProvisioningSuccessNotification(context: Context) {

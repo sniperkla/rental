@@ -112,6 +112,10 @@ export class Device {
   @Prop({ default: 30 })
   standalonePollingInterval: number;
 
+  /** Active restriction keys for standalone devices (e.g. ['no_factory_reset', 'no_usb_file_transfer']). */
+  @Prop({ type: [String], default: [] })
+  standaloneRestrictions: string[];
+
   // ── Post-Scan Configuration ────────────────────────────────────
   /** Tags for categorization (e.g. 'VIP', 'High-value'). */
   @Prop({ type: [String], default: [] })

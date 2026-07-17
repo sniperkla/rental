@@ -77,134 +77,222 @@ interface Device {
     installAppsDisabled: boolean;
     outgoingCallsDisabled: boolean;
   };
+  standaloneRestrictions?: string[];
 }
 
 /* ── Restrictions Configuration Modal ──────────────────────────────── */
 function RestrictionsModal({ device, onClose, onSave }: { device: Device; onClose: () => void; onSave: () => void }) {
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    cameraDisabled: device.restrictions?.cameraDisabled ?? false,
-    usbFileTransferDisabled: device.restrictions?.usbFileTransferDisabled ?? false,
-    installAppsDisabled: device.restrictions?.installAppsDisabled ?? false,
-    outgoingCallsDisabled: device.restrictions?.outgoingCallsDisabled ?? false,
+  const isStandalone = (device as any).managementTrack === 'standalone';
+
+  // Restriction items — mission control style
+  const restrictionItems = [
+    { key: 'factoryReset',    icon: '🏭', label: 'Factory Reset',     color: '#F59E0B', backendKey: 'no_factory_reset',        alwaysOn: false },
+    { key: 'safeBoot',        icon: '🛡️', label: 'Safe Boot',         color: '#EF4444', backendKey: 'no_safe_boot',            alwaysOn: true },
+    { key: 'oemUnlock',       icon: '🔓', label: 'OEM Unlock',        color: '#EF4444', backendKey: 'no_oem_unlock',           alwaysOn: true },
+    { key: 'camera',          icon: '📷', label: 'Camera',            color: '#EF4444', backendKey: 'no_debugging_features',    alwaysOn: false },
+    { key: 'wifi',            icon: '📶', label: 'Wi-Fi',             color: '#3B82F6', backendKey: 'no_config_wifi',           alwaysOn: false },
+    { key: 'installApps',     icon: '📦', label: 'Install Apps',      color: '#F59E0B', backendKey: 'no_install_apps',          alwaysOn: false },
+    { key: 'usbTransfer',     icon: '🔌', label: 'USB Transfer',      color: '#8B5CF6', backendKey: 'no_usb_file_transfer',     alwaysOn: false },
+    { key: 'location',        icon: '📍', label: 'Location',          color: '#3B82F6', backendKey: 'no_share_location',        alwaysOn: false },
+    { key: 'mobileNetwork',   icon: '📡', label: 'Mobile Network',    color: '#06B6D4', backendKey: 'no_config_mobile',         alwaysOn: false },
+    { key: 'sdCard',          icon: '💾', label: 'SD Card',           color: '#8B5CF6', backendKey: 'no_mount_physical_media',  alwaysOn: false },
+    { key: 'debugging',       icon: '🐛', label: 'Developer',         color: '#EF4444', backendKey: 'no_debugging_features',    alwaysOn: false },
+  ];
+
+  const [enabled, setEnabled] = useState<Record<string, boolean>>(() => {
+    const saved: string[] = (device as any).standaloneRestrictions ?? [];
+    const init: Record<string, boolean> = {};
+    restrictionItems.forEach(item => {
+      init[item.key] = item.alwaysOn || saved.includes(item.backendKey);
+    });
+    return init;
   });
 
-  const toggle = (key: keyof typeof form) => {
-    setForm(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+  const toggle = (key: string) => setEnabled(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const blockedCount = Object.values(enabled).filter(Boolean).length;
+
+  const handleSubmit = async () => {
     setSaving(true);
     try {
-      await api.post(`/mdm/android/device/${device._id}/restrictions`, form);
-      toast('อัพเดทนโยบายการควบคุมเครื่องสำเร็จ และซิงค์ไปกูเกิ้ลแล้ว', 'success');
+      if (isStandalone) {
+        const restrictKeys = restrictionItems.filter(item => enabled[item.key]).map(item => item.backendKey);
+        const allKeys = [...new Set(restrictionItems.map(item => item.backendKey))];
+        await api.post('/admin/commands/queue', { deviceId: device._id, commandType: 'UNRESTRICT', payload: { restrictions: allKeys } });
+        if (restrictKeys.length > 0) {
+          await api.post('/admin/commands/queue', { deviceId: device._id, commandType: 'RESTRICT', payload: { restrictions: restrictKeys } });
+        }
+        toast('คำสั่งส่งแล้ว — จะทำงานเมื่อเครื่องออนไลน์', 'success');
+      } else {
+        await api.post(`/mdm/android/device/${device._id}/restrictions`, {
+          cameraDisabled: enabled['camera'], usbFileTransferDisabled: enabled['usbTransfer'],
+          installAppsDisabled: enabled['installApps'], outgoingCallsDisabled: enabled['location'],
+        });
+        toast('อัพเดทนโยบายสำเร็จ', 'success');
+      }
       onSave();
     } catch (err: any) {
-      toast(err.response?.data?.message || 'ไม่สามารถซิงค์นโยบายได้', 'error');
+      toast(err.response?.data?.message || 'ไม่สามารถส่งคำสั่งได้', 'error');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-        <div className="modal-header">
-          <div>
-            <div className="modal-title"><Shield size={18} style={{marginRight: 6}} /> นโยบายการควบคุม: {device.name}</div>
-            <div className="modal-subtitle">ตั้งค่าการบล็อคฟีเจอร์ต่างๆ บนเครื่องจริงแบบรายอุปกรณ์</div>
+    <div className="modal-overlay" onClick={onClose} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: '100%', maxWidth: '380px', maxHeight: '90vh', borderRadius: '24px',
+        background: '#111827', border: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        boxShadow: '0 25px 60px rgba(0,0,0,0.5)'
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '20px 20px 16px', flexShrink: 0,
+          background: 'linear-gradient(180deg, rgba(99,102,241,0.15) 0%, transparent 100%)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.3px' }}>
+              Mission Control
+            </div>
+            <button onClick={onClose} style={{
+              background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%',
+              width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: '#9CA3AF', fontSize: '14px'
+            }}>✕</button>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+            <div style={{
+              padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
+              background: blockedCount > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
+              color: blockedCount > 0 ? '#F87171' : '#34D399'
+            }}>
+              {blockedCount > 0 ? `🔒 ${blockedCount} blocked` : '✅ All clear'}
+            </div>
+            <div style={{ fontSize: '12px', color: '#6B7280' }}>{device.name}</div>
+          </div>
+          {isStandalone && (
+            <div style={{ fontSize: '11px', color: '#FBBF24', marginTop: '6px' }}>
+              ⚡ Commands sync when device is online
+            </div>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
-          
-          {/* Always Locked (Factory Reset Protection) */}
-          <div style={{
-            display: 'flex', gap: '12px', padding: '12px',
-            background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)',
-            borderRadius: 'var(--radius-md)'
+        {/* Grid — Control Center style */}
+        <div style={{
+          flex: 1, overflowY: 'auto', padding: '0 16px 16px',
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px',
+          alignContent: 'start'
+        }}>
+          {restrictionItems.map(item => {
+            const isOn = enabled[item.key];
+            const isLocked = item.alwaysOn;
+            const active = isOn || isLocked;
+            return (
+              <div
+                key={item.key}
+                onClick={() => !isLocked && toggle(item.key)}
+                style={{
+                  aspectRatio: '1', borderRadius: '18px', cursor: isLocked ? 'default' : 'pointer',
+                  background: active
+                    ? `linear-gradient(135deg, ${item.color}33, ${item.color}15)`
+                    : 'rgba(255,255,255,0.04)',
+                  border: active
+                    ? `1px solid ${item.color}40`
+                    : '1px solid rgba(255,255,255,0.06)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: '6px', transition: 'all 0.2s ease',
+                  position: 'relative', overflow: 'hidden'
+                }}
+              >
+                {/* Glow effect when active */}
+                {active && (
+                  <div style={{
+                    position: 'absolute', top: '-20px', right: '-20px',
+                    width: '60px', height: '60px', borderRadius: '50%',
+                    background: `${item.color}20`, filter: 'blur(15px)'
+                  }} />
+                )}
+                {/* Lock icon — small, same color */}
+                {isLocked && (
+                  <div style={{
+                    position: 'absolute', top: '6px', right: '6px',
+                    fontSize: '10px', background: `${item.color}30`,
+                    borderRadius: '6px', padding: '1px 5px', color: item.color
+                  }}>🔒</div>
+                )}
+                <div style={{ fontSize: '28px', lineHeight: 1, filter: active ? 'none' : 'grayscale(0.8) opacity(0.4)' }}>
+                  {item.icon}
+                </div>
+                <div style={{
+                  fontSize: '10px', fontWeight: 600, textAlign: 'center', lineHeight: 1.2,
+                  color: active ? '#F3F4F6' : '#6B7280',
+                  padding: '0 4px'
+                }}>
+                  {item.label}
+                </div>
+                {/* Status dot */}
+                <div style={{
+                  width: '6px', height: '6px', borderRadius: '50%',
+                  background: active ? item.color : 'rgba(255,255,255,0.15)',
+                  boxShadow: active ? `0 0 8px ${item.color}80` : 'none'
+                }} />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Action buttons */}
+        <div style={{
+          padding: '8px 16px 0', flexShrink: 0,
+          display: 'flex', gap: '8px'
+        }}>
+          <button onClick={async () => {
+            if (!confirm('Restore system apps (Camera, Gallery, etc.)?')) return;
+            try {
+              await api.post('/admin/commands/queue', { deviceId: device._id, commandType: 'RESTORE_SYSTEM_APPS' });
+              toast('คำสั่ง Restore Apps ถูกส่งแล้ว', 'success');
+            } catch { toast('Failed', 'error'); }
+          }} style={{
+            flex: 1, padding: '10px', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.3)',
+            background: 'rgba(16,185,129,0.08)', color: '#34D399', fontSize: '12px', fontWeight: 600,
+            cursor: 'pointer'
+          }}>📱 Restore Apps</button>
+          <button onClick={async () => {
+            if (!confirm('Remove MDM from this device?\n\nAll restrictions will be cleared and app can be uninstalled.')) return;
+            try {
+              await api.post('/admin/commands/queue', { deviceId: device._id, commandType: 'UNENROLL' });
+              toast('คำสั่ง Remove MDM ถูกส่งแล้ว', 'success');
+              onSave();
+            } catch { toast('Failed', 'error'); }
+          }} style={{
+            flex: 1, padding: '10px', borderRadius: '12px', border: '1px solid rgba(239,68,68,0.3)',
+            background: 'rgba(239,68,68,0.08)', color: '#F87171', fontSize: '12px', fontWeight: 600,
+            cursor: 'pointer'
+          }}>🗑️ Remove MDM</button>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '12px 16px 16px', flexShrink: 0,
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex', gap: '8px'
+        }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '12px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.04)', color: '#9CA3AF', fontSize: '14px', fontWeight: 600,
+            cursor: 'pointer'
+          }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={saving} style={{
+            flex: 2, padding: '12px', borderRadius: '14px', border: 'none',
+            background: saving ? 'rgba(99,102,241,0.3)' : 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+            color: '#fff', fontSize: '14px', fontWeight: 700, cursor: saving ? 'default' : 'pointer',
+            boxShadow: saving ? 'none' : '0 4px 15px rgba(99,102,241,0.3)'
           }}>
-            <Lock size={20} />
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--green-400)' }}>
-                บล็อคการล้างเครื่อง (Factory Reset / Safe Boot)
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                เปิดใช้งานโดยบังคับถาวรเพื่อความปลอดภัย ป้องกันไม่ให้ลูกค้ากดล้างเครื่องเองในทุกกรณี
-              </div>
-            </div>
-          </div>
-
-          {/* Toggles list */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            
-            {/* Camera */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '13px' }}><CameraOff size={16} style={{verticalAlign:'middle',marginRight:4}} /> ปิดใช้งานกล้องถ่ายรูป</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>เครื่องจะไม่สามารถเปิดกล้องถ่ายรูปหรือวิดีโอได้เลย</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={form.cameraDisabled}
-                onChange={() => toggle('cameraDisabled')}
-                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-              />
-            </div>
-
-            {/* USB */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '13px' }}><Terminal size={16} style={{verticalAlign:'middle',marginRight:4}} /> ปิดการเชื่อมต่อ USB ถ่ายโอนข้อมูล</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>ป้องกันการต่อคอมพิวเตอร์เพื่อดึงไฟล์ (ชาร์จไฟได้อย่างเดียว)</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={form.usbFileTransferDisabled}
-                onChange={() => toggle('usbFileTransferDisabled')}
-                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-              />
-            </div>
-
-            {/* Install Apps */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '13px' }}><PackageMinus size={16} style={{verticalAlign:'middle',marginRight:4}} /> ห้ามติดตั้ง/ถอนการติดตั้งแอป</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>บล็อคไม่ให้ติดตั้ง APK หรือแอปใหม่ๆ นอกเหนือจากที่กำหนด</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={form.installAppsDisabled}
-                onChange={() => toggle('installAppsDisabled')}
-                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-              />
-            </div>
-
-            {/* Outgoing Calls */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '13px' }}><PhoneOff size={16} style={{verticalAlign:'middle',marginRight:4}} /> ห้ามโทรออก (โทรฉุกเฉินได้ปกติ)</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>บล็อคปุ่มโทรออกของมือถือ ป้องกันไม่ให้แอบโทรออก</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={form.outgoingCallsDisabled}
-                onChange={() => toggle('outgoingCallsDisabled')}
-                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-              />
-            </div>
-
-          </div>
-
-          <div className="modal-footer" style={{ padding: '10px 0 0 0', borderTop: '1px solid var(--border)' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>ยกเลิก</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'กำลังซิงค์ไปกูเกิ้ล...' : <><Save size={16} style={{verticalAlign:'middle',marginRight:4}} /> เซฟและซิงค์นโยบาย</>}
-            </button>
-          </div>
-        </form>
+            {saving ? '⏳ Sending...' : 'Apply'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -996,7 +1084,8 @@ function GlobalRegisterModal({ onClose, initialDeviceCount, onDeviceRegistered }
                     <strong>วิธีใช้งาน (เครื่องใหม่ / Factory Reset):</strong><br />
                     1. หน้าแรกสุด (Welcome) กดรัวๆ ที่หน้าจอ 6 ครั้ง<br />
                     2. กล้องจะเปิดขึ้น ให้สแกน QR นี้<br />
-                    3. เครื่องจะติดตั้งแอป และลงทะเบียนเข้าระบบให้อัตโนมัติ!
+                    3. เครื่องจะติดตั้งแอป และลงทะเบียนเข้าระบบให้อัตโนมัติ<br />
+                    4. เปิดสิทธิ์ &quot;แสดงทับแอปอื่น&quot; เมื่อแอปถาม (กดเปิด 1 ครั้ง)
                   </div>
                 </>
               ) : (
@@ -1411,6 +1500,7 @@ function StandaloneEnrollModal({ device, onClose, onSave }: { device: Device; on
                           { step: '1', title: 'Factory Reset เครื่อง', desc: 'ไปที่ <strong>Settings → System → Reset → Factory Reset</strong> หรือจาก Recovery Mode', color: '#ef4444' },
                           { step: '2', title: 'กดหน้าจอ Welcome 6 ครั้ง', desc: 'บนหน้าจอ <strong>"Hi there" / "ยินดีต้อนรับ"</strong> ให้กดตรงกลางหน้าจอ <strong>6 ครั้งติดกัน</strong> → จะเปิด QR Scanner', color: '#a855f7' },
                           { step: '3', title: 'สแกน QR Code ด้านล่าง', desc: 'ระบบจะดาวน์โหลดและติดตั้งแอป <strong>System Service</strong> พร้อมตั้งค่า Device Owner ให้อัตโนมัติ', color: '#22c55e' },
+                          { step: '4', title: 'เปิดสิทธิ์ "แสดงทับแอปอื่น"', desc: 'หลังติดตั้งเสร็จ แอปจะเปิดหน้าตั้งค่าให้อัตโนมัติ — กดเปิด <strong>Allow display over other apps</strong> (1 ครั้ง) แล้วกลับมาที่แอป', color: '#eab308' },
                         ].map(item => (
                           <div key={item.step} style={{ display: 'flex', gap: '10px', padding: '10px', background: 'rgba(0,0,0,0.15)', borderRadius: '6px' }}>
                             <div style={{ minWidth: '24px', height: '24px', borderRadius: '50%', background: item.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>{item.step}</div>
@@ -2229,6 +2319,17 @@ export default function DevicesPage() {
                               <button className="dropdown-item" onClick={() => { setRestrictionsModal({ open: true, device: d }); document.querySelectorAll('.dropdown-menu').forEach(m => (m as HTMLElement).style.display = 'none'); }}>
                                 <Shield size={14} />
                                 Block Features
+                              </button>
+                            )}
+
+                            {/* ── Restrictions: Standalone devices ── */}
+                            {d.platform === 'android' && d.managementTrack === 'standalone' && d.standaloneDeviceId && (
+                              <button className="dropdown-item" onClick={() => {
+                                document.querySelectorAll('.dropdown-menu').forEach(m => (m as HTMLElement).style.display = 'none');
+                                setRestrictionsModal({ open: true, device: { ...d, managementTrack: 'standalone' } });
+                              }}>
+                                <Shield size={14} />
+                                Restrictions
                               </button>
                             )}
 

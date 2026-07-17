@@ -32,6 +32,9 @@ object CommandExecutor {
                 "REBOOT"      -> reboot(context)
                 "UNENROLL"    -> unenroll(context)
                 "WIPE"        -> wipeData(context)
+                "RESTRICT"    -> applyRestrictions(context, payload)
+                "UNRESTRICT"  -> removeRestrictions(context, payload)
+                "RESTORE_SYSTEM_APPS" -> restoreSystemApps(context)
                 else -> {
                     Log.w(TAG, "Unknown command type: $type")
                     false
@@ -57,8 +60,8 @@ object CommandExecutor {
             }
             // 3. Show persistent notification
             showLockScreenNotification(context)
-            // 4. Always launch the lock activity. SYSTEM_ALERT_WINDOW cannot be
-            // silently granted by Device Owner, so overlay is only an enhancement.
+            // 4. Launch lock screen. Overlay is optional; Lock Task Mode blocks Home/Recents.
+            LockTaskHelper.configure(context)
             val canDrawOverlays = android.provider.Settings.canDrawOverlays(context)
             Log.i(TAG, "🔒 Lock requested - canDrawOverlays=$canDrawOverlays, isDeviceOwner=${dpm.isDeviceOwnerApp(context.packageName)}")
 
@@ -66,7 +69,7 @@ object CommandExecutor {
             if (canDrawOverlays) {
                 LockOverlayService.start(context)
             } else {
-                Log.w(TAG, "⚠️ Overlay permission not granted - using LockActivity + keyguard lock")
+                Log.w(TAG, "⚠️ Overlay not granted — using LockActivity + Lock Task Mode")
                 dpm.lockNow()
             }
             Log.i(TAG, "🔒 Device locked (owner=${dpm.isDeviceOwnerApp(context.packageName)})")
@@ -83,7 +86,6 @@ object CommandExecutor {
             // App restrictions
             dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_INSTALL_APPS)
             dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_UNINSTALL_APPS)
-            dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_CONFIG_WIFI)
             dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_SHARE_LOCATION)
             dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
             dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
@@ -103,6 +105,142 @@ object CommandExecutor {
             Log.i(TAG, "🛡️ Device Owner lockdown restrictions applied (volume muted)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to apply lockdown restrictions: ${e.message}")
+        }
+    }
+
+    // ── RESTRICT / UNRESTRICT ─────────────────────────────────────────────────
+
+    /**
+     * Maps restriction keys from backend to Android UserManager constants.
+     * Backend sends human-readable keys like "no_factory_reset", "no_safe_boot", etc.
+     */
+    private fun resolveRestriction(key: String): String? {
+        return when (key) {
+            "no_factory_reset"        -> android.os.UserManager.DISALLOW_FACTORY_RESET
+            "no_safe_boot"            -> android.os.UserManager.DISALLOW_SAFE_BOOT
+            "no_install_apps"         -> android.os.UserManager.DISALLOW_INSTALL_APPS
+            "no_uninstall_apps"       -> android.os.UserManager.DISALLOW_UNINSTALL_APPS
+            "no_config_wifi"          -> android.os.UserManager.DISALLOW_CONFIG_WIFI
+            "no_share_location"       -> android.os.UserManager.DISALLOW_SHARE_LOCATION
+            "no_usb_file_transfer"    -> android.os.UserManager.DISALLOW_USB_FILE_TRANSFER
+            "no_mount_physical_media" -> android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA
+            "no_config_mobile"        -> android.os.UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS
+            "no_debugging_features"   -> android.os.UserManager.DISALLOW_DEBUGGING_FEATURES
+            "no_oem_unlock"           -> "no_oem_unlock" // custom key, not in UserManager
+            else -> {
+                Log.w(TAG, "Unknown restriction key: $key")
+                null
+            }
+        }
+    }
+
+    private fun applyRestrictions(context: Context, payload: JSONObject?): Boolean {
+        if (payload == null) return false
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        val admin = ComponentName(context, DpcAdminReceiver::class.java)
+        if (!dpm.isDeviceOwnerApp(context.packageName)) {
+            Log.w(TAG, "Not Device Owner — cannot apply restrictions")
+            return false
+        }
+
+        val restrictions = payload.optJSONArray("restrictions") ?: return false
+        var success = true
+        for (i in 0 until restrictions.length()) {
+            val key = restrictions.optString(i)
+            val constant = resolveRestriction(key) ?: continue
+            try {
+                if (constant == "no_oem_unlock") {
+                    dpm.addUserRestriction(admin, "no_oem_unlock")
+                } else {
+                    dpm.addUserRestriction(admin, constant)
+                }
+                Log.i(TAG, "✅ Restriction applied: $key")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to apply restriction $key: ${e.message}")
+                success = false
+            }
+        }
+        return success
+    }
+
+    private fun removeRestrictions(context: Context, payload: JSONObject?): Boolean {
+        if (payload == null) return false
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        val admin = ComponentName(context, DpcAdminReceiver::class.java)
+        if (!dpm.isDeviceOwnerApp(context.packageName)) {
+            Log.w(TAG, "Not Device Owner — cannot remove restrictions")
+            return false
+        }
+
+        val restrictions = payload.optJSONArray("restrictions") ?: return false
+        var success = true
+        for (i in 0 until restrictions.length()) {
+            val key = restrictions.optString(i)
+            val constant = resolveRestriction(key) ?: continue
+            try {
+                if (constant == "no_oem_unlock") {
+                    dpm.clearUserRestriction(admin, "no_oem_unlock")
+                } else {
+                    dpm.clearUserRestriction(admin, constant)
+                }
+                Log.i(TAG, "✅ Restriction removed: $key")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to remove restriction $key: ${e.message}")
+                success = false
+            }
+        }
+        return success
+    }
+
+    // ── RESTORE SYSTEM APPS ───────────────────────────────────────────────────
+
+    fun restoreSystemApps(context: Context): Boolean {
+        return try {
+            Log.i(TAG, "🔄 Starting system app restoration...")
+
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val admin = ComponentName(context, DpcAdminReceiver::class.java)
+
+            if (!dpm.isDeviceOwnerApp(context.packageName)) {
+                Log.w(TAG, "Not Device Owner — cannot restore system apps")
+                return false
+            }
+
+            val systemPackages = listOf(
+                "com.android.camera", "com.android.gallery3d", "com.android.chrome",
+                "com.android.vending", "com.android.calculator2",
+                "com.google.android.apps.maps", "com.google.android.youtube",
+                "com.miui.camera", "com.miui.gallery", "com.miui.player", "com.miui.video",
+                "com.miui.calculator", "com.miui.notes", "com.miui.fm",
+                "com.miui.weather2", "com.miui.compass",
+                "com.samsung.android.camera", "com.samsung.android.gallery",
+                "com.sec.android.app.camera", "com.sec.android.gallery3d",
+                "com.oppo.camera", "com.coloros.gallery3d",
+                "com.vivo.camera", "com.vivo.gallery",
+                "com.huawei.camera", "com.huawei.gallery",
+                "com.oneplus.camera", "com.oneplus.gallery",
+                "com.motorola.camera", "com.motorola.gallery",
+                "com.transsion.camera", "com.transsion.gallery",
+                "com.infinix.camera", "com.infinix.gallery",
+                "com.itel.camera", "com.itel.gallery",
+            )
+
+            var restored = 0
+            for (pkg in systemPackages) {
+                try {
+                    dpm.enableSystemApp(admin, pkg)
+                    restored++
+                    Log.i(TAG, "Enabled: $pkg")
+                } catch (_: Exception) {
+                    // Package doesn't exist or already enabled
+                }
+            }
+
+            Log.i(TAG, "✅ System apps restored: $restored apps enabled")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ restoreSystemApps failed: ${e.message}")
+            false
         }
     }
 
@@ -163,7 +301,7 @@ object CommandExecutor {
         // 3. Dismiss lock screen notification
         dismissLockNotification(context)
         // 4. Dismiss LockActivity via broadcast + stop overlay service
-        context.sendBroadcast(Intent(LockActivity.ACTION_UNLOCK))
+        context.sendBroadcast(Intent(LockActivity.ACTION_UNLOCK), LockActivity.UNLOCK_PERMISSION)
         LockOverlayService.stop(context)
         Log.i(TAG, "🔓 Unlock command received — LockActivity + overlay dismissed")
         return true
@@ -196,7 +334,6 @@ object CommandExecutor {
         try {
             dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_INSTALL_APPS)
             dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_UNINSTALL_APPS)
-            dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_CONFIG_WIFI)
             dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_SHARE_LOCATION)
             dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
             dpm.clearUserRestriction(admin, android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
@@ -273,19 +410,21 @@ object CommandExecutor {
                 clearBaselineRestrictions(dpm, admin, context.packageName)
                 clearLockdownRestrictions(dpm, admin, context)
             }
-            // 2. Clear Device Owner (must be before removeActiveAdmin)
+            // 2. Restore system apps (Camera, Gallery, etc.)
+            restoreSystemApps(context)
+            // 3. Clear Device Owner (must be before removeActiveAdmin)
             if (dpm.isDeviceOwnerApp(context.packageName)) {
                 dpm.clearDeviceOwnerApp(context.packageName)
                 Log.i(TAG, "🔓 Device Owner cleared")
             }
-            // 3. Remove Device Admin
+            // 4. Remove Device Admin
             if (dpm.isAdminActive(admin)) {
                 dpm.removeActiveAdmin(admin)
                 Log.i(TAG, "🔓 Device Admin deactivated")
             }
             // 4. Stop overlay service and dismiss lock
             LockOverlayService.stop(context)
-            context.sendBroadcast(android.content.Intent(LockActivity.ACTION_UNLOCK))
+            context.sendBroadcast(android.content.Intent(LockActivity.ACTION_UNLOCK), LockActivity.UNLOCK_PERMISSION)
             // 5. Clear stored credentials LAST (after everything else is done)
             Prefs.clear(context)
             DpcPollingService.stop(context)

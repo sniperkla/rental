@@ -91,19 +91,7 @@ class LockOverlayService : Service() {
 
         // Check if we have overlay permission
         if (!canDrawOverlays(this)) {
-            Log.e(TAG, "❌ Cannot draw overlays - permission not granted")
-            // Try to open overlay permission settings
-            try {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                ).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(intent)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to open overlay settings: ${e.message}")
-            }
+            Log.w(TAG, "Overlay permission not granted — LockActivity + Lock Task Mode handle lock")
             return
         }
 

@@ -8,6 +8,8 @@ import { Device, DeviceDocument, DeviceStatus, DevicePlatform } from '../schemas
 import { RemindersService } from '../reminders/reminders.service';
 import { AndroidMdmService } from '../android-mdm/android-mdm.service';
 import { AppleMdmService } from '../apple-mdm/apple-mdm.service';
+import { StandaloneMdmService } from '../standalone-mdm/standalone-mdm.service';
+import { MdmCommandType } from '../schemas/mdm-command.schema';
 
 @Injectable()
 export class SchedulerService {
@@ -19,6 +21,7 @@ export class SchedulerService {
     private remindersService: RemindersService,
     private androidMdm: AndroidMdmService,
     private appleMdm: AppleMdmService,
+    private standaloneMdm: StandaloneMdmService,
     private config: ConfigService,
   ) {}
 
@@ -62,6 +65,16 @@ export class SchedulerService {
         if (device.platform === 'android' && device.androidEnterpriseName) {
           const locked = await this.androidMdm.lockDevice(device.androidEnterpriseName);
           if (locked) await this.deviceModel.findByIdAndUpdate(device._id, { status: DeviceStatus.LOCKED });
+        } else if (
+          device.platform === 'android' &&
+          device.managementTrack === 'standalone' &&
+          device.standaloneDeviceId
+        ) {
+          await this.standaloneMdm.queueCommand({
+            deviceId: device._id.toString(),
+            commandType: MdmCommandType.LOCK,
+          });
+          await this.deviceModel.findByIdAndUpdate(device._id, { status: DeviceStatus.LOCKED });
         } else if (device.platform === 'ios' && device.appleMdmUdid) {
           const locked = await this.appleMdm.lockDevice(device.appleMdmUdid, device.applePushToken);
           if (locked) await this.deviceModel.findByIdAndUpdate(device._id, { status: DeviceStatus.LOCKED });
@@ -110,6 +123,16 @@ export class SchedulerService {
       if (device.platform === 'android' && device.androidEnterpriseName) {
         const unlocked = await this.androidMdm.unlockDevice(device.androidEnterpriseName);
         if (unlocked) await this.deviceModel.findByIdAndUpdate(device._id, { status: DeviceStatus.RENTED });
+      } else if (
+        device.platform === 'android' &&
+        device.managementTrack === 'standalone' &&
+        device.standaloneDeviceId
+      ) {
+        await this.standaloneMdm.queueCommand({
+          deviceId: device._id.toString(),
+          commandType: MdmCommandType.UNLOCK,
+        });
+        await this.deviceModel.findByIdAndUpdate(device._id, { status: DeviceStatus.RENTED });
       } else if (device.platform === 'ios' && device.appleMdmUdid) {
         const unlocked = await this.appleMdm.unlockDevice(device.appleMdmUdid, device.applePushToken);
         if (unlocked) await this.deviceModel.findByIdAndUpdate(device._id, { status: DeviceStatus.RENTED });

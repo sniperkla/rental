@@ -29,19 +29,28 @@ export class AdbBridgeService {
       );
     }
 
-    const command = `adb shell dpm set-device-owner com.rental.dpc/.DpcAdminReceiver`;
+    const setOwnerCommand = `adb shell dpm set-device-owner com.rental.dpc/.DpcAdminReceiver`;
+    const grantOverlayCommand = `adb shell appops set com.rental.dpc SYSTEM_ALERT_WINDOW allow`;
     this.logger.log(`Activating Device Owner for device: ${device.name} (${deviceId})`);
 
     try {
-      const result = await this.gateway.executeAdbCommand(deviceId, command);
+      const result = await this.gateway.executeAdbCommand(deviceId, setOwnerCommand);
 
       if (result.success) {
+        // Auto-grant "Display over other apps" — cannot be done silently from the app itself
+        const overlayResult = await this.gateway.executeAdbCommand(deviceId, grantOverlayCommand);
+        if (!overlayResult.success) {
+          this.logger.warn(`Device Owner set but overlay grant failed: ${overlayResult.error}`);
+        }
+
         await this.devicesService.model.findByIdAndUpdate(deviceId, { status: 'available' });
         this.logger.log(`✅ Device Owner activated for ${device.name}`);
         return {
           success: true,
-          message: 'Device Owner activated successfully',
-          output: result.output,
+          message: overlayResult.success
+            ? 'Device Owner activated and overlay permission granted'
+            : 'Device Owner activated (overlay permission grant failed — enable manually on device)',
+          output: [result.output, overlayResult.output].filter(Boolean).join('\n'),
         };
       } else {
         this.logger.warn(`❌ Device Owner activation failed: ${result.error}`);

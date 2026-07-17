@@ -81,7 +81,10 @@ scp rental-dpc.apk user@server:/home/ec2-user/rental/backend/uploads/dpc/rental-
       fs.createReadStream(dpcApkPath).pipe(res);
     } else {
       const host = req.headers.host || 'localhost:3001';
-      const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+      const isHttps = req.secure
+        || req.headers['x-forwarded-proto'] === 'https'
+        || (req.headers['cf-visitor'] && (req.headers['cf-visitor'] as string).includes('"https"'));
+      const protocol = isHttps ? 'https' : 'http';
       const downloadUrl = `${protocol}://${host}/api/dpc/download?download=true`;
       const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(downloadUrl)}`;
 
@@ -175,7 +178,10 @@ scp rental-dpc.apk user@server:/home/ec2-user/rental/backend/uploads/dpc/rental-
   getProvisioningQr(@Req() req: Request) {
     const dpcApkPath = path.join(getApkStorageDir().replace('/apks', '/dpc'), 'rental-dpc.apk');
     const host = req.headers.host || 'localhost:3001';
-    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const isHttps = req.secure
+      || req.headers['x-forwarded-proto'] === 'https'
+      || (req.headers['cf-visitor'] && (req.headers['cf-visitor'] as string).includes('"https"'));
+    const protocol = isHttps ? 'https' : 'http';
     const downloadUrl = `${protocol}://${host}/api/dpc/download?download=true`;
 
     // IMPORTANT: PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM must be the SHA-256 of the
@@ -255,6 +261,8 @@ scp rental-dpc.apk user@server:/home/ec2-user/rental/backend/uploads/dpc/rental-
         'On the Welcome screen, tap 6 times rapidly',
         'The phone will open a QR scanner',
         'Scan this QR — Android will download & install the app as Device Owner automatically',
+        'After install: enable "Display over other apps" when prompted (one tap)',
+        'If skipped, lock still works via Lock Task Mode — overlay improves touch blocking',
       ],
     };
   }
@@ -403,6 +411,7 @@ export class DpcController {
       configuredAt: (device as any).configuredAt ? (device as any).configuredAt.toISOString() : '',
       securityMode: (device as any).securityMode || '',
       status: device.status,
+      recoveryCodeHash: (device as any).recoveryCodeHash || '',
     };
   }
 }

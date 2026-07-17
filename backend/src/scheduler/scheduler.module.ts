@@ -6,6 +6,7 @@ import { Device, DeviceSchema } from '../schemas/device.schema';
 import { RemindersModule } from '../reminders/reminders.module';
 import { AndroidMdmModule } from '../android-mdm/android-mdm.module';
 import { AppleMdmModule } from '../apple-mdm/apple-mdm.module';
+import { StandaloneMdmModule } from '../standalone-mdm/standalone-mdm.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AppleMdmModule } from '../apple-mdm/apple-mdm.module';
     RemindersModule,
     AndroidMdmModule,
     AppleMdmModule,
+    StandaloneMdmModule,
   ],
   providers: [SchedulerService],
   exports: [SchedulerService],
