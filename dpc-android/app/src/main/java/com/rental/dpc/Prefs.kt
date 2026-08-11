@@ -135,6 +135,8 @@ object Prefs {
         get(ctx).getBoolean(KEY_DEV_OPTIONS_WARNING_SHOWN, false)
 
     private const val KEY_LOCK_REASON = "lock_reason"
+    private const val KEY_CUSTOM_LOCK_MESSAGE = "custom_lock_message"
+    private const val KEY_CUSTOM_LOCK_PHONE = "custom_lock_phone"
 
     /** Reason codes: "server", "admin_removed", "usb_debug", "dev_options", "" (unlocked) */
     fun setLockReason(ctx: Context, reason: String) {
@@ -143,6 +145,20 @@ object Prefs {
 
     fun getLockReason(ctx: Context): String =
         get(ctx).getString(KEY_LOCK_REASON, "") ?: ""
+
+    fun setCustomLockMessage(ctx: Context, msg: String) {
+        get(ctx).edit().putString(KEY_CUSTOM_LOCK_MESSAGE, msg).apply()
+    }
+
+    fun getCustomLockMessage(ctx: Context): String =
+        get(ctx).getString(KEY_CUSTOM_LOCK_MESSAGE, "") ?: ""
+
+    fun setCustomLockPhone(ctx: Context, phone: String) {
+        get(ctx).edit().putString(KEY_CUSTOM_LOCK_PHONE, phone).apply()
+    }
+
+    fun getCustomLockPhone(ctx: Context): String =
+        get(ctx).getString(KEY_CUSTOM_LOCK_PHONE, "") ?: ""
 
     // ── Offline Recovery Code ──────────────────────────────────────────────
     private const val KEY_RECOVERY_CODE_HASH = "recovery_code_hash"

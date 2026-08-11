@@ -128,14 +128,34 @@ class LockActivity : Activity() {
                 titleEn = "Device Admin Removed",
                 bodyEn  = "Device Admin permission was removed.\n\nPlease contact the shop to restore your device."
             )
-            else -> LockContent(
-                icon    = "🔒",
-                titleTh = "เครื่องถูกล็อคโดยระบบบริหารจัดการ",
-                bodyTh  = "📞 กรุณาติดต่อร้านเช่าเพื่อปลดล็อคและใช้งานต่อ",
-                titleEn = "Device Locked",
-                bodyEn  = "This device has been remotely locked by the rental management system.\n\nPlease contact the shop to unlock your device."
-            )
+            else -> {
+                // "server" lock — use custom message from dashboard if set, else fall back to default
+                val customMsg   = Prefs.getCustomLockMessage(this)
+                val customPhone = Prefs.getCustomLockPhone(this)
+                val bodyThText = when {
+                    customMsg.isNotBlank() && customPhone.isNotBlank() ->
+                        "$customMsg\n\n📞 โทร: $customPhone"
+                    customMsg.isNotBlank() -> customMsg
+                    customPhone.isNotBlank() -> "📞 กรุณาติดต่อ: $customPhone"
+                    else -> "📞 กรุณาติดต่อร้านเช่าเพื่อปลดล็อคและใช้งานต่อ"
+                }
+                val bodyEnText = when {
+                    customMsg.isNotBlank() && customPhone.isNotBlank() ->
+                        "$customMsg\n\n📞 Call: $customPhone"
+                    customMsg.isNotBlank() -> customMsg
+                    customPhone.isNotBlank() -> "📞 Please call: $customPhone"
+                    else -> "This device has been remotely locked by the rental management system.\n\nPlease contact the shop to unlock your device."
+                }
+                LockContent(
+                    icon    = "🔒",
+                    titleTh = "เครื่องถูกล็อคโดยระบบบริหารจัดการ",
+                    bodyTh  = bodyThText,
+                    titleEn = "Device Locked",
+                    bodyEn  = bodyEnText
+                )
+            }
         }
+
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

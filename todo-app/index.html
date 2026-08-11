@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kimi Code — AI Code Editor</title>
+    <script src="https://js.puter.com/v2/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface2: #0d1117;
+            --surface3: #1c2129;
+            --border: #30363d;
+            --border2: #21262d;
+            --text: #e6edf3;
+            --text2: #8b949e;
+            --text3: #484f58;
+            --accent: #58a6ff;
+            --accent2: #388bfd;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --orange: #db6d28;
+            --purple: #bc8cff;
+            --pink: #f778ba;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ===== Toolbar ===== */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            height: 48px;
+            padding: 0 12px;
+            flex-shrink: 0;
+        }
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 0 4px;
+        }
+        .toolbar-group + .toolbar-group {
+            border-left: 1px solid var(--border);
+            margin-left: 4px;
+            padding-left: 8px;
+        }
+        .toolbar-spacer { flex: 1; }
+        .tb {
+            background: none;
+            border: 1px solid transparent;
+            color: var(--text2);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.12s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+        .tb:hover { background: var(--surface3); color: var(--text); border-color: var(--border); }
+        .tb.primary { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+        .tb.primary:hover { background: var(--accent); }
+        .tb .icon { font-size: 1rem; }
+        .tb-label { font-size: 0.75rem; }
+
+        /* ===== Model Selector (custom dropdown) ===== */
+        .model-selector {
+            position: relative;
+            min-width: 180px;
+        }
+        .model-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--surface3);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            font-family: inherit;
+            width: 100%;
+            transition: border-color 0.12s;
+        }
+        .model-btn:hover { border-color: var(--accent); }
+        .model-btn .model-name { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .model-btn .chevron { font-size: 0.6rem; color: var(--text3); transition: transform 0.15s; }
+        .model-btn.open .chevron { transform: rotate(180deg); }
+        .model-btn .provider-dot {
+            width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+        }
+
+        .model-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+            z-index: 200;
+            max-height: 320px;
+            overflow: hidden;
+            flex-direction: column;
+        }
+        .model-dropdown.show { display: flex; }
+        .model-search {
+            padding: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .model-search input {
+            width: 100%;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-family: inherit;
+            outline: none;
+        }
+        .model-search input:focus { border-color: var(--accent); }
+        .model-search input::placeholder { color: var(--text3); }
+        .model-list {
+            overflow-y: auto;
+            flex: 1;
+            padding: 4px;
+        }
+        .model-group-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text3);
+            padding: 8px 10px 4px;
+        }
+        .model-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            color: var(--text2);
+            transition: all 0.1s;
+        }
+        .model-option:hover { background: var(--surface3); color: var(--text); }
+        .model-option.active { background: rgba(88,166,255,0.1); color: var(--accent); }
+        .model-option .opt-dot {
+            width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+        }
+        .model-option .opt-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .model-option .opt-free {
+            font-size: 0.6rem;
+            background: rgba(63,185,80,0.15);
+            color: var(--green);
+            padding: 1px 6px;
+            border-radius: 10px;
+        }
+
+        /* ===== Main Layout ===== */
+        .main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ===== Sidebar ===== */
+        .sidebar {
+            width: 240px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .sidebar-title {
+            padding: 10px 14px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text3);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .sidebar-title button {
+            background: none; border: none; color: var(--text3);
+            cursor: pointer; font-size: 0.9rem; padding: 2px 4px;
+            border-radius: 4px; transition: color 0.12s;
+        }
+        .sidebar-title button:hover { color: var(--text); }
+        .breadcrumb {
+            padding: 6px 14px;
+            font-size: 0.7rem;
+            color: var(--text3);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 2px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .breadcrumb span { cursor: pointer; transition: color 0.12s; padding: 1px 3px; border-radius: 3px; }
+        .breadcrumb span:hover { color: var(--accent); background: rgba(88,166,255,0.08); }
+        .breadcrumb .sep { color: var(--text3); cursor: default; }
+        .breadcrumb .sep:hover { background: none; color: var(--text3); }
+        .file-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 6px;
+        }
+        .ft-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            color: var(--text2);
+            border-radius: 5px;
+            transition: all 0.1s;
+            gap: 6px;
+        }
+        .ft-item:hover { background: var(--surface3); color: var(--text); }
+        .ft-item.active { background: rgba(88,166,255,0.1); color: var(--accent); }
+        .ft-item .ft-icon { width: 16px; text-align: center; font-size: 0.72rem; flex-shrink: 0; }
+        .ft-item.dir .ft-icon { color: var(--accent); }
+        .ft-item.file .ft-icon { color: var(--text3); }
+        .ft-item .ft-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ft-empty { text-align: center; padding: 32px 12px; color: var(--text3); font-size: 0.75rem; }
+
+        /* ===== Editor ===== */
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .editor-tabs {
+            display: flex;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            flex-shrink: 0;
+            padding: 0 4px;
+        }
+        .editor-tab {
+            padding: 8px 14px;
+            font-size: 0.78rem;
+            color: var(--text3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            transition: all 0.1s;
+            position: relative;
+            border-right: 1px solid transparent;
+        }
+        .editor-tab:hover { color: var(--text2); background: var(--surface3); }
+        .editor-tab.active { color: var(--text); background: var(--bg); }
+        .editor-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--accent);
+        }
+        .editor-tab .tab-close {
+            font-size: 0.85rem;
+            opacity: 0;
+            transition: opacity 0.1s;
+            padding: 0 2px;
+            border-radius: 3px;
+            line-height: 1;
+        }
+        .editor-tab:hover .tab-close { opacity: 0.5; }
+        .editor-tab .tab-close:hover { opacity: 1; color: var(--red); }
+        .editor-tab .tab-dot { color: var(--yellow); font-size: 0.5rem; }
+
+        .editor-body {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+        .gutter {
+            padding: 14px 0;
+            text-align: right;
+            color: var(--text3);
+            font-size: 0.78rem;
+            line-height: 1.6;
+            min-width: 44px;
+            padding-right: 10px;
+            background: var(--bg);
+            user-select: none;
+            overflow: hidden;
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+        }
+        .editor-textarea {
+            flex: 1;
+            background: var(--bg);
+            color: var(--text);
+            border: none;
+            padding: 14px;
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            tab-size: 2;
+            overflow: auto;
+        }
+        .editor-textarea::placeholder { color: var(--text3); }
+        .editor-welcome {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text3);
+            gap: 8px;
+        }
+        .editor-welcome .big { font-size: 2.5rem; opacity: 0.3; }
+        .editor-welcome p { font-size: 0.82rem; }
+        .editor-welcome .hint { font-size: 0.72rem; color: var(--text3); opacity: 0.6; }
+
+        .editor-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 14px;
+            font-size: 0.7rem;
+            color: var(--text3);
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .editor-bar .left, .editor-bar .right { display: flex; gap: 14px; }
+
+        /* ===== AI Panel ===== */
+        .ai-panel {
+            width: 380px;
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .ai-header {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ai-header .dot { width: 7px; height: 7px; background: var(--green); border-radius: 50%; }
+        .ai-header .title { font-size: 0.8rem; font-weight: 600; flex: 1; }
+        .ai-context {
+            padding: 6px 14px;
+            font-size: 0.68rem;
+            color: var(--text3);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            align-items: center;
+            min-height: 30px;
+        }
+        .ai-context .chip {
+            background: rgba(88,166,255,0.08);
+            color: var(--accent);
+            padding: 2px 7px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 0.65rem;
+        }
+        .ai-context .chip .x { cursor: pointer; opacity: 0.5; font-size: 0.75rem; }
+        .ai-context .chip .x:hover { opacity: 1; }
+        .ai-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .msg {
+            font-size: 0.8rem;
+            line-height: 1.6;
+            padding: 10px 12px;
+            border-radius: 8px;
+            max-width: 92%;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .msg.user {
+            background: rgba(88,166,255,0.1);
+            color: var(--text);
+            align-self: flex-end;
+            border-bottom-right-radius: 3px;
+        }
+        .msg.assistant {
+            background: var(--surface3);
+            color: var(--text);
+            align-self: flex-start;
+            border-bottom-left-radius: 3px;
+        }
+        .msg.system {
+            background: rgba(63,185,80,0.06);
+            color: var(--green);
+            font-size: 0.72rem;
+            text-align: center;
+            align-self: center;
+            padding: 5px 10px;
+        }
+        .msg.error { background: rgba(248,81,73,0.1); color: var(--red); }
+        .msg code { background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px; font-family: inherit; font-size: 0.85em; }
+        .msg pre {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            margin: 6px 0;
+            overflow-x: auto;
+            font-family: inherit;
+            font-size: 0.75rem;
+            line-height: 1.5;
+        }
+        .msg pre .code-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border);
+        }
+        .msg pre .code-head .lang { font-size: 0.62rem; color: var(--text3); text-transform: uppercase; }
+        .msg pre .apply-btn {
+            background: rgba(63,185,80,0.12);
+            color: var(--green);
+            border: 1px solid rgba(63,185,80,0.25);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.62rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.12s;
+        }
+        .msg pre .apply-btn:hover { background: var(--green); color: var(--bg); }
+
+        .ai-input-area { border-top: 1px solid var(--border); padding: 10px 14px; }
+        .ai-input-row { display: flex; gap: 6px; }
+        .ai-input {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.8rem;
+            outline: none;
+            resize: none;
+            min-height: 36px;
+            max-height: 100px;
+            transition: border-color 0.12s;
+        }
+        .ai-input:focus { border-color: var(--accent); }
+        .ai-input::placeholder { color: var(--text3); }
+        .ai-send {
+            background: var(--accent2);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.78rem;
+            font-family: inherit;
+            transition: all 0.12s;
+            align-self: flex-end;
+        }
+        .ai-send:hover { background: var(--accent); }
+        .ai-send:disabled { opacity: 0.35; cursor: not-allowed; }
+        .ai-quick {
+            display: flex;
+            gap: 4px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+        }
+        .ai-quick button {
+            background: var(--surface3);
+            color: var(--text2);
+            border: 1px solid var(--border);
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.68rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.12s;
+        }
+        .ai-quick button:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* ===== File Browser Modal ===== */
+        .overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .overlay.show { display: flex; }
+        .fb-modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            width: 560px;
+            max-width: 92vw;
+            max-height: 78vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .fb-top {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .fb-top h3 { font-size: 0.9rem; color: var(--text); margin: 0; font-weight: 600; }
+        .fb-close {
+            background: none; border: none; color: var(--text3);
+            font-size: 1.2rem; cursor: pointer; padding: 2px 6px;
+            border-radius: 4px; transition: all 0.12s;
+        }
+        .fb-close:hover { color: var(--red); background: rgba(248,81,73,0.1); }
+        .fb-path {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.75rem;
+        }
+        .fb-path .path-icon { color: var(--yellow); }
+        .fb-path .path-text { flex: 1; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fb-path .open-here-btn {
+            background: var(--accent2);
+            color: #fff;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 5px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            transition: all 0.12s;
+        }
+        .fb-path .open-here-btn:hover { background: var(--accent); }
+        .fb-list {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 180px;
+            max-height: 320px;
+            padding: 4px;
+        }
+        .fb-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            color: var(--text2);
+            border-radius: 5px;
+            transition: all 0.1s;
+        }
+        .fb-item:hover { background: var(--surface3); color: var(--text); }
+        .fb-item.selected { background: rgba(88,166,255,0.1); color: var(--accent); }
+        .fb-item .fb-icon { width: 18px; text-align: center; font-size: 0.85rem; flex-shrink: 0; }
+        .fb-item.dir .fb-icon { color: var(--accent); }
+        .fb-item.file .fb-icon { color: var(--text3); }
+        .fb-item.back .fb-icon { color: var(--text3); }
+        .fb-item .fb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fb-item .fb-size { font-size: 0.68rem; color: var(--text3); flex-shrink: 0; width: 60px; text-align: right; }
+        .fb-empty { text-align: center; padding: 40px 16px; color: var(--text3); font-size: 0.78rem; }
+        .fb-bottom {
+            padding: 10px 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .fb-bottom .browse-btn {
+            background: var(--surface3);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.12s;
+        }
+        .fb-bottom .browse-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .fb-actions { display: flex; gap: 6px; }
+        .fb-actions button {
+            padding: 7px 18px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.12s;
+        }
+        .fb-cancel { background: none; border: 1px solid var(--border); color: var(--text2); }
+        .fb-cancel:hover { border-color: var(--text2); color: var(--text); }
+        .fb-ok { background: var(--accent2); border: none; color: #fff; font-weight: 600; }
+        .fb-ok:hover { background: var(--accent); }
+        .fb-ok:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar { width: 7px; height: 7px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 1024px) {
+            .sidebar { width: 200px; }
+            .ai-panel { width: 300px; }
+        }
+        @media (max-width: 768px) {
+            .main { flex-direction: column; }
+            .sidebar { width: 100%; height: 160px; border-right: none; border-bottom: 1px solid var(--border); }
+            .ai-panel { width: 100%; height: 260px; border-left: none; border-top: 1px solid var(--border); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ===== Toolbar ===== -->
+<div class="toolbar">
+    <div class="toolbar-group">
+        <div class="model-selector" id="modelSelector">
+            <button class="model-btn" id="modelBtn" onclick="toggleModelDropdown()">
+                <span class="provider-dot" id="providerDot" style="background:var(--accent)"></span>
+                <span class="model-name" id="modelName">kimi</span>
+                <span class="chevron">&#9662;</span>
+            </button>
+            <div class="model-dropdown" id="modelDropdown">
+                <div class="model-search">
+                    <input type="text" id="modelSearchInput" placeholder="Search models..." oninput="filterModels()">
+                </div>
+                <div class="model-list" id="modelList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toolbar-group">
+        <button class="tb" onclick="openProjectModal()">
+            <span class="icon">&#128194;</span>
+            <span class="tb-label">Open Project</span>
+        </button>
+        <button class="tb" onclick="saveCurrentFile()">
+            <span class="icon">&#128190;</span>
+            <span class="tb-label">Save</span>
+        </button>
+    </div>
+
+    <div class="toolbar-spacer"></div>
+
+    <div class="toolbar-group">
+        <span id="userBadge" style="font-size:0.72rem;color:var(--green);display:none"></span>
+        <button class="tb" id="signInBtn" onclick="doSignIn()">
+            <span class="tb-label">Sign In</span>
+        </button>
+    </div>
+</div>
+
+<!-- ===== Main ===== -->
+<div class="main">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-title">
+            <span>Explorer</span>
+            <button onclick="refreshTree()" title="Refresh">&#8635;</button>
+        </div>
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="file-tree" id="fileTree">
+            <div class="ft-empty">Open a project to browse files</div>
+        </div>
+    </div>
+
+    <!-- Editor -->
+    <div class="editor-area">
+        <div class="editor-tabs" id="editorTabs"></div>
+        <div class="editor-body" id="editorBody">
+            <div class="editor-welcome" id="welcomeScreen">
+                <div class="big">&#9000;</div>
+                <p>Open a project to start editing</p>
+                <p class="hint">Click "Open Project" in the toolbar</p>
+            </div>
+        </div>
+        <div class="editor-bar" id="editorBar" style="display:none">
+            <div class="left">
+                <span id="statusFile">-</span>
+                <span id="statusLang">-</span>
+            </div>
+            <div class="right">
+                <span id="statusLine">Ln 1, Col 1</span>
+                <span id="statusSaved">Saved</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Panel -->
+    <div class="ai-panel">
+        <div class="ai-header">
+            <span class="dot"></span>
+            <span class="title">AI Assistant</span>
+        </div>
+        <div class="ai-context" id="aiContext">
+            <span style="color:var(--text3)">Context: none</span>
+        </div>
+        <div class="ai-messages" id="aiMessages">
+            <div class="msg system">Open files to add context. I can see your project and help you code.</div>
+        </div>
+        <div class="ai-input-area">
+            <div class="ai-input-row">
+                <textarea class="ai-input" id="aiInput" placeholder="Ask AI to write, edit, explain code..." rows="1" onkeydown="handleAIKey(event)"></textarea>
+                <button class="ai-send" id="aiSendBtn" onclick="sendAI()">Send</button>
+            </div>
+            <div class="ai-quick">
+                <button onclick="aiQuick('explain')">Explain</button>
+                <button onclick="aiQuick('refactor')">Refactor</button>
+                <button onclick="aiQuick('debug')">Find bugs</button>
+                <button onclick="aiQuick('tests')">Write tests</button>
+                <button onclick="aiQuick('feature')">Add feature</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== File Browser Modal ===== -->
+<div class="overlay" id="fbOverlay">
+    <div class="fb-modal">
+        <div class="fb-top">
+            <h3>Open Project Folder</h3>
+            <button class="fb-close" onclick="closeFB()">&times;</button>
+        </div>
+        <div class="fb-path">
+            <span class="path-icon">&#128193;</span>
+            <span class="path-text" id="fbPathText">Select a folder from your computer</span>
+            <button class="open-here-btn" onclick="openHere()">Open This Folder</button>
+        </div>
+        <div class="fb-list" id="fbList">
+            <div class="fb-empty" style="padding:50px 16px">
+                <div style="font-size:2rem;margin-bottom:8px;opacity:0.3">&#128194;</div>
+                <p>Click "Browse My Computer" below</p>
+            </div>
+        </div>
+        <div class="fb-bottom">
+            <button class="browse-btn" onclick="pickFolder()">&#128194; Browse My Computer</button>
+            <div class="fb-actions">
+                <button class="fb-cancel" onclick="closeFB()">Cancel</button>
+                <button class="fb-ok" id="fbOkBtn" onclick="openHere()" disabled>Open Folder</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// State
+// ============================================================
+let projectHandle = null;
+let projectRootPath = '';
+let browserHandle = null;
+let browserPathParts = [];
+let currentPath = '';
+let fileTree = [];
+let localTreeHandle = null;
+let openTabs = [];
+let activeTab = -1;
+let aiMessages = [];
+let contextFiles = new Set();
+let isAIStreaming = false;
+let selectedModel = 'kimi';
+let allModels = [];
+
+// ============================================================
+// Auth
+// ============================================================
+async function doSignIn() {
+    try { await puter.auth.signIn(); await initUser(); } catch (e) { console.error(e); }
+}
+async function initUser() {
+    try {
+        const user = await puter.auth.getUser();
+        document.getElementById('signInBtn').style.display = 'none';
+        const b = document.getElementById('userBadge');
+        b.style.display = '';
+        b.textContent = user.username || user.email || 'User';
+    } catch {
+        document.getElementById('signInBtn').style.display = '';
+        document.getElementById('userBadge').style.display = 'none';
+    }
+}
+
+// ============================================================
+// Model Selector
+// ============================================================
+const providerColors = {
+    openai: '#10a37f', anthropic: '#d4a27f', google: '#4285f4', 'x-ai': '#999',
+    moonshot: '#7c3aed', deepseek: '#0ea5e9', mistral: '#f97316', 'meta-llama': '#1877f2',
+    cohere: '#39594d', 'stability-ai': '#a855f7', databricks: '#ff6f00',
+};
+
+function getProviderColor(provider) {
+    return providerColors[provider?.toLowerCase()] || 'var(--text3)';
+}
+
+async function loadModels() {
+    try {
+        const models = await puter.ai.listModels();
+        allModels = models;
+        renderModelList(models);
+    } catch (e) {
+        console.error('loadModels:', e);
+        allModels = [{ id: 'kimi', provider: 'moonshot' }, { id: 'gpt-4o-mini', provider: 'openai' }];
+        renderModelList(allModels);
+    }
+}
+
+function renderModelList(models) {
+    const el = document.getElementById('modelList');
+    const grouped = {};
+    for (const m of models) {
+        const p = m.provider || m.owner || 'other';
+        if (!grouped[p]) grouped[p] = [];
+        grouped[p].push(m);
+    }
+    const priority = ['moonshot', 'openai', 'anthropic', 'google', 'deepseek', 'x-ai', 'mistral', 'meta-llama'];
+    const providers = Object.keys(grouped).sort((a, b) => {
+        const ai = priority.indexOf(a.toLowerCase()), bi = priority.indexOf(b.toLowerCase());
+        if (ai >= 0 && bi >= 0) return ai - bi;
+        if (ai >= 0) return -1; if (bi >= 0) return 1;
+        return a.localeCompare(b);
+    });
+
+    let html = '';
+    for (const provider of providers) {
+        html += `<div class="model-group-label">${provider}</div>`;
+        const sorted = grouped[provider].sort((a, b) => a.id.localeCompare(b.id));
+        for (const m of sorted) {
+            const color = getProviderColor(provider);
+            const isActive = m.id === selectedModel;
+            html += `<div class="model-option ${isActive ? 'active' : ''}" onclick="selectModel('${m.id}', '${provider}', this)" data-name="${m.id.toLowerCase()}">
+                <span class="opt-dot" style="background:${color}"></span>
+                <span class="opt-name">${m.id}</span>
+            </div>`;
+        }
+    }
+    el.innerHTML = html;
+}
+
+function toggleModelDropdown() {
+    const dd = document.getElementById('modelDropdown');
+    const btn = document.getElementById('modelBtn');
+    const isOpen = dd.classList.contains('show');
+    if (isOpen) {
+        dd.classList.remove('show');
+        btn.classList.remove('open');
+        document.removeEventListener('click', closeModelDD);
+    } else {
+        dd.classList.add('show');
+        btn.classList.add('open');
+        document.getElementById('modelSearchInput').value = '';
+        filterModels();
+        setTimeout(() => document.addEventListener('click', closeModelDD), 0);
+    }
+}
+
+function closeModelDD(e) {
+    const sel = document.getElementById('modelSelector');
+    if (!sel.contains(e.target)) {
+        document.getElementById('modelDropdown').classList.remove('show');
+        document.getElementById('modelBtn').classList.remove('open');
+        document.removeEventListener('click', closeModelDD);
+    }
+}
+
+function filterModels() {
+    const q = document.getElementById('modelSearchInput').value.toLowerCase();
+    const items = document.querySelectorAll('#modelList .model-option');
+    const labels = document.querySelectorAll('#modelList .model-group-label');
+    items.forEach(item => {
+        item.style.display = item.dataset.name.includes(q) ? '' : 'none';
+    });
+    labels.forEach(label => {
+        const next = label.nextElementSibling;
+        let hasVisible = false;
+        let el = next;
+        while (el && !el.classList.contains('model-group-label')) {
+            if (el.classList.contains('model-option') && el.style.display !== 'none') hasVisible = true;
+            el = el.nextElementSibling;
+        }
+        label.style.display = hasVisible ? '' : 'none';
+    });
+}
+
+function selectModel(id, provider, el) {
+    selectedModel = id;
+    document.getElementById('modelName').textContent = id;
+    document.getElementById('providerDot').style.background = getProviderColor(provider);
+    document.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
+    if (el) el.classList.add('active');
+    document.getElementById('modelDropdown').classList.remove('show');
+    document.getElementById('modelBtn').classList.remove('open');
+    document.removeEventListener('click', closeModelDD);
+    aiMessages.push({ role: 'system', content: `Model switched to ${id}` });
+    renderAI();
+}
+
+// ============================================================
+// File Browser Modal
+// ============================================================
+function openProjectModal() {
+    document.getElementById('fbOverlay').classList.add('show');
+    document.getElementById('fbOkBtn').disabled = true;
+    if (!projectHandle) {
+        document.getElementById('fbList').innerHTML = `<div class="fb-empty" style="padding:50px 16px"><div style="font-size:2rem;margin-bottom:8px;opacity:0.3">&#128194;</div><p>Click "Browse My Computer" below</p></div>`;
+        document.getElementById('fbPathText').textContent = 'Select a folder from your computer';
+    }
+}
+function closeFB() { document.getElementById('fbOverlay').classList.remove('show'); }
+
+async function pickFolder() {
+    try {
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        projectHandle = handle;
+        projectRootPath = handle.name;
+        browserHandle = handle;
+        browserPathParts = [handle.name];
+        document.getElementById('fbPathText').textContent = handle.name;
+        document.getElementById('projectName') && (document.getElementById('projectName').textContent = handle.name);
+        await renderFBList(handle);
+        document.getElementById('fbOkBtn').disabled = false;
+    } catch (e) { if (e.name !== 'AbortError') console.error(e); }
+}
+
+async function renderFBList(dirHandle) {
+    const el = document.getElementById('fbList');
+    el.innerHTML = '<div class="fb-empty">Loading...</div>';
+    try {
+        const entries = [];
+        for await (const [name, handle] of dirHandle.entries()) {
+            entries.push({ name, handle, isDir: handle.kind === 'directory' });
+        }
+        entries.sort((a, b) => { if (a.isDir !== b.isDir) return a.isDir ? -1 : 1; return a.name.localeCompare(b.name); });
+        const filtered = entries.filter(e => !e.name.startsWith('.'));
+        let html = '';
+        if (browserPathParts.length > 1) {
+            html += `<div class="fb-item back" onclick="fbBack()"><span class="fb-icon">&#8593;</span><span class="fb-name">..</span></div>`;
+        }
+        for (const e of filtered) {
+            const cls = e.isDir ? 'dir' : 'file';
+            const icon = e.isDir ? '&#128193;' : fileIcon(e.name);
+            const dbl = e.isDir ? `ondblclick="fbInto('${esc(e.name)}')"` : '';
+            html += `<div class="fb-item ${cls}" onclick="fbSelect(this,'${esc(e.name)}',${e.isDir})" ${dbl}><span class="fb-icon">${icon}</span><span class="fb-name">${escH(e.name)}</span><span class="fb-size">${e.isDir ? '' : ''}</span></div>`;
+        }
+        el.innerHTML = html || '<div class="fb-empty">Empty folder</div>';
+    } catch (e) { el.innerHTML = `<div class="fb-empty">Cannot read: ${escH(e.message)}</div>`; }
+}
+
+async function fbInto(name) {
+    try {
+        const handle = await browserHandle.getDirectoryHandle(name);
+        browserHandle = handle;
+        browserPathParts.push(name);
+        document.getElementById('fbPathText').textContent = browserPathParts.join(' / ');
+        document.getElementById('fbOkBtn').disabled = false;
+        await renderFBList(handle);
+    } catch (e) { console.error(e); }
+}
+
+async function fbBack() {
+    if (browserPathParts.length <= 1) return;
+    browserPathParts.pop();
+    let h = projectHandle;
+    for (let i = 1; i < browserPathParts.length; i++) h = await h.getDirectoryHandle(browserPathParts[i]);
+    browserHandle = h;
+    document.getElementById('fbPathText').textContent = browserPathParts.join(' / ');
+    await renderFBList(h);
+}
+
+function fbSelect(el, name, isDir) {
+    document.querySelectorAll('.fb-item').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('fbOkBtn').disabled = false;
+}
+
+function openHere() {
+    projectHandle = browserHandle;
+    projectRootPath = browserPathParts.join('/');
+    closeFB();
+    openTabs = []; activeTab = -1; contextFiles.clear();
+    updateCtxBar();
+    navigateLocalTo(browserHandle, '');
+    renderTabs(); renderEditor();
+}
+
+// ============================================================
+// Sidebar File Tree
+// ============================================================
+async function navigateLocalTo(dirHandle, relPath) {
+    localTreeHandle = dirHandle;
+    currentPath = relPath;
+    try {
+        const entries = [];
+        for await (const [name, handle] of dirHandle.entries()) {
+            entries.push({ name, handle, isDir: handle.kind === 'directory' });
+        }
+        entries.sort((a, b) => { if (a.isDir !== b.isDir) return a.isDir ? -1 : 1; return a.name.localeCompare(b.name); });
+        fileTree = entries.filter(e => !e.name.startsWith('.')).map(e => ({
+            name: e.name, path: relPath ? relPath + '/' + e.name : e.name, isDir: e.isDir, _handle: e.handle
+        }));
+    } catch (e) { fileTree = []; }
+    renderBreadcrumb();
+    renderFileTree();
+}
+
+async function navigateTo(relPath) {
+    if (!projectHandle) return;
+    let h = projectHandle;
+    if (relPath) { for (const p of relPath.split('/')) h = await h.getDirectoryHandle(p); }
+    await navigateLocalTo(h, relPath);
+}
+
+function renderBreadcrumb() {
+    const el = document.getElementById('breadcrumb');
+    const parts = currentPath ? currentPath.split('/') : [];
+    let html = `<span onclick="navigateTo('')">root</span>`;
+    let acc = '';
+    for (const p of parts) {
+        acc += (acc ? '/' : '') + p;
+        html += `<span class="sep">/</span><span onclick="navigateTo('${esc(acc)}')">${escH(p)}</span>`;
+    }
+    el.innerHTML = html;
+}
+
+function renderFileTree() {
+    const el = document.getElementById('fileTree');
+    if (!fileTree.length) { el.innerHTML = '<div class="ft-empty">Empty directory</div>'; return; }
+    el.innerHTML = fileTree.map(f => `
+        <div class="ft-item ${f.isDir ? 'dir' : 'file'} ${activeTab >= 0 && openTabs[activeTab]?.path === f.path ? 'active' : ''}"
+             onclick="${f.isDir ? `navigateTo('${esc(f.path)}')` : `openFile('${esc(f.path)}')`}">
+            <span class="ft-icon">${f.isDir ? '&#128193;' : fileIcon(f.name)}</span>
+            <span class="ft-name">${escH(f.name)}</span>
+        </div>
+    `).join('');
+}
+
+function refreshTree() { if (projectHandle) navigateTo(currentPath); }
+
+function fileIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    const m = { js:'&#9998;',ts:'&#9998;',jsx:'&#9998;',tsx:'&#9998;',py:'&#9881;',html:'&#9733;',css:'&#9733;',json:'&#9862;',md:'&#9776;',yml:'&#9862;',yaml:'&#9862;',sh:'&#9654;',go:'&#9883;',rs:'&#9881;',rb:'&#9830;',java:'&#9998;',c:'&#9881;',cpp:'&#9881;',h:'&#9881;' };
+    return m[ext] || '&#9679;';
+}
+
+// ============================================================
+// Editor
+// ============================================================
+async function openFile(relPath) {
+    const existing = openTabs.findIndex(t => t.path === relPath);
+    if (existing >= 0) { activeTab = existing; renderTabs(); renderEditor(); return; }
+    try {
+        let dir = projectHandle;
+        const parts = relPath.split('/');
+        const fileName = parts.pop();
+        for (const p of parts) dir = await dir.getDirectoryHandle(p);
+        const fileHandle = await dir.getFileHandle(fileName);
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        openTabs.push({ path: relPath, name: fileName, content: text, original: text, modified: false, _fh: fileHandle });
+        activeTab = openTabs.length - 1;
+        contextFiles.add(relPath);
+        updateCtxBar(); renderTabs(); renderEditor(); renderFileTree();
+    } catch (e) { console.error('openFile:', e); }
+}
+
+async function saveCurrentFile() {
+    if (activeTab < 0) return;
+    const tab = openTabs[activeTab];
+    if (!tab.modified) return;
+    try {
+        const w = await tab._fh.createWritable();
+        await w.write(tab.content);
+        await w.close();
+        tab.original = tab.content; tab.modified = false;
+        renderTabs(); updateEditorBar();
+    } catch (e) { console.error('save:', e); }
+}
+
+function closeTab(i, e) { if (e) e.stopPropagation(); openTabs.splice(i, 1); if (activeTab >= openTabs.length) activeTab = openTabs.length - 1; renderTabs(); renderEditor(); renderFileTree(); }
+function switchTab(i) { activeTab = i; renderTabs(); renderEditor(); renderFileTree(); }
+
+function renderTabs() {
+    const el = document.getElementById('editorTabs');
+    if (!openTabs.length) { el.innerHTML = ''; return; }
+    el.innerHTML = openTabs.map((t, i) => `
+        <div class="editor-tab ${i === activeTab ? 'active' : ''}" onclick="switchTab(${i})">
+            <span>${escH(t.name)}</span>
+            ${t.modified ? '<span class="tab-dot">&#9679;</span>' : ''}
+            <span class="tab-close" onclick="closeTab(${i},event)">&times;</span>
+        </div>
+    `).join('');
+}
+
+function renderEditor() {
+    const body = document.getElementById('editorBody');
+    const bar = document.getElementById('editorBar');
+    if (activeTab < 0 || !openTabs[activeTab]) {
+        body.innerHTML = `<div class="editor-welcome" id="welcomeScreen"><div class="big">&#9000;</div><p>Open a project to start editing</p><p class="hint">Click "Open Project" in the toolbar</p></div>`;
+        bar.style.display = 'none';
+        return;
+    }
+    const tab = openTabs[activeTab];
+    bar.style.display = '';
+    const lines = tab.content.split('\n').length;
+    const nums = Array.from({ length: lines }, (_, i) => i + 1).join('\n');
+    body.innerHTML = `<div class="gutter" id="gutter">${nums}</div><textarea class="editor-textarea" id="editorTA" spellcheck="false" oninput="onEdit()" onscroll="syncScroll()" onclick="updateCursor()" onkeyup="updateCursor()">${escH(tab.content)}</textarea>`;
+    updateEditorBar();
+}
+
+function onEdit() {
+    if (activeTab < 0) return;
+    const ta = document.getElementById('editorTA');
+    const tab = openTabs[activeTab];
+    tab.content = ta.value;
+    tab.modified = tab.content !== tab.original;
+    const g = document.getElementById('gutter');
+    if (g) g.textContent = Array.from({ length: ta.value.split('\n').length }, (_, i) => i + 1).join('\n');
+    renderTabs(); updateEditorBar();
+}
+function syncScroll() {
+    const ta = document.getElementById('editorTA'), g = document.getElementById('gutter');
+    if (ta && g) g.scrollTop = ta.scrollTop;
+}
+function updateCursor() {
+    const ta = document.getElementById('editorTA'); if (!ta) return;
+    const pos = ta.selectionStart, text = ta.value.substring(0, pos);
+    const line = text.split('\n').length, col = pos - text.lastIndexOf('\n');
+    document.getElementById('statusLine').textContent = `Ln ${line}, Col ${col}`;
+}
+function updateEditorBar() {
+    if (activeTab < 0) return;
+    const tab = openTabs[activeTab];
+    document.getElementById('statusFile').textContent = tab.path;
+    document.getElementById('statusLang').textContent = tab.name.split('.').pop();
+    document.getElementById('statusSaved').textContent = tab.modified ? 'Modified' : 'Saved';
+}
+
+// ============================================================
+// AI Panel
+// ============================================================
+function updateCtxBar() {
+    const el = document.getElementById('aiContext');
+    if (!contextFiles.size) { el.innerHTML = '<span style="color:var(--text3)">Context: none</span>'; return; }
+    let html = '';
+    for (const f of contextFiles) {
+        html += `<span class="chip">${f.split('/').pop()}<span class="x" onclick="rmCtx('${esc(f)}')">&times;</span></span>`;
+    }
+    el.innerHTML = html;
+}
+function rmCtx(path) { contextFiles.delete(path); updateCtxBar(); }
+
+function getProjectContext() {
+    const tree = fileTree.map(f => `${f.isDir ? '[DIR]' : '     '} ${f.path}`).join('\n');
+    let ctx = `Project: ${projectRootPath}\nDir: ${currentPath || '/'}\n\nFiles:\n${tree}`;
+    if (contextFiles.size) {
+        ctx += '\n\n--- Open files ---\n';
+        for (const p of contextFiles) {
+            const tab = openTabs.find(t => t.path === p);
+            if (tab) {
+                const c = tab.content.length > 4000 ? tab.content.substring(0, 4000) + '\n... (truncated)' : tab.content;
+                ctx += `\n### ${p}\n\`\`\`\n${c}\n\`\`\`\n`;
+            }
+        }
+    }
+    return ctx;
+}
+
+function renderAI() {
+    const el = document.getElementById('aiMessages');
+    el.innerHTML = aiMessages.map(m => {
+        let c = m.content;
+        c = c.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+            const id = 'c_' + Math.random().toString(36).slice(2, 8);
+            return `<pre><div class="code-head"><span class="lang">${lang || 'code'}</span><button class="apply-btn" onclick="applyCode('${id}')">Apply</button></div><code id="${id}">${escH(code.trim())}</code></pre>`;
+        });
+        c = c.replace(/`([^`]+)`/g, '<code>$1</code>');
+        return `<div class="msg ${m.role}">${c}</div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+}
+
+function handleAIKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAI(); }
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+}
+
+async function sendAI(customPrompt) {
+    const input = document.getElementById('aiInput');
+    const prompt = customPrompt || input.value.trim();
+    if (!prompt || isAIStreaming) return;
+    if (!customPrompt) input.value = '';
+    aiMessages.push({ role: 'user', content: prompt });
+    renderAI();
+
+    const ctx = getProjectContext();
+    const sys = `You are an expert coding assistant. When writing code, wrap in fenced blocks with language tag. When suggesting file changes, provide COMPLETE file content. Be concise in explanations, detailed in code.\n\n${ctx}`;
+    const messages = [{ role: 'system', content: sys }, ...aiMessages.map(m => ({ role: m.role, content: m.content }))];
+
+    isAIStreaming = true;
+    document.getElementById('aiSendBtn').disabled = true;
+    aiMessages.push({ role: 'assistant', content: '' });
+    renderAI();
+
+    try {
+        const resp = await puter.ai.chat(messages, { model: selectedModel, stream: true });
+        let full = '';
+        for await (const part of resp) {
+            if (part?.text) { full += part.text; aiMessages[aiMessages.length - 1].content = full; renderAI(); }
+        }
+        if (!full) {
+            const r = await puter.ai.chat(messages, { model: selectedModel });
+            aiMessages[aiMessages.length - 1].content = typeof r === 'string' ? r : r?.message?.content || 'No response.';
+            renderAI();
+        }
+    } catch (e) {
+        aiMessages[aiMessages.length - 1].content = 'Error: ' + (e.message || e);
+        aiMessages[aiMessages.length - 1].role = 'error';
+    }
+    isAIStreaming = false;
+    document.getElementById('aiSendBtn').disabled = false;
+    renderAI();
+}
+
+function aiQuick(action) {
+    const f = activeTab >= 0 ? openTabs[activeTab]?.name : '(no file)';
+    const p = {
+        explain: `Explain the code in ${f}. Break it down section by section.`,
+        refactor: `Refactor ${f}. Improve readability and best practices. Show complete refactored file.`,
+        debug: `Review ${f} for bugs and edge cases.`,
+        tests: `Write unit tests for ${f}.`,
+        feature: `Based on the project, suggest and implement a useful feature.`
+    };
+    sendAI(p[action] || p.explain);
+}
+
+function applyCode(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const code = el.textContent;
+    if (activeTab < 0) {
+        openTabs.push({ path: 'untitled', name: 'untitled', content: code, original: code, modified: true });
+        activeTab = openTabs.length - 1;
+    } else {
+        const tab = openTabs[activeTab];
+        tab.content = code;
+        tab.modified = code !== tab.original;
+    }
+    renderTabs(); renderEditor();
+    aiMessages.push({ role: 'system', content: 'Code applied to editor. Save when ready.' });
+    renderAI();
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+function escH(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function esc(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+// ============================================================
+// Init
+// ============================================================
+(async () => {
+    await initUser();
+    await loadModels();
+})();
+</script>
+
+</body>
+</html>

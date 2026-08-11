@@ -326,6 +326,12 @@ export class StandaloneMdmService {
        }
      }
 
+     // Clear camera restriction when restoring system apps
+     if (device.managementTrack === 'standalone' && dto.commandType === MdmCommandType.RESTORE_SYSTEM_APPS) {
+       const remaining = (device.standaloneRestrictions ?? []).filter(k => k !== 'no_camera');
+       await this.devicesService.model.findByIdAndUpdate(dto.deviceId, { standaloneRestrictions: remaining });
+     }
+
      if (device.managementTrack === 'standalone') {
        this.logger.log(`⏳ Command ${dto.commandType} queued (PENDING) for standalone device: ${device.name}`);
        

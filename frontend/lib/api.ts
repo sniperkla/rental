@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
+  // Always use the Next.js proxy path so CORS is avoided in all environments.
+  // next.config.ts rewrites /api/* → NEXT_PUBLIC_API_URL/*
+  baseURL: '/api',
 });
 
 // Attach JWT token to every request

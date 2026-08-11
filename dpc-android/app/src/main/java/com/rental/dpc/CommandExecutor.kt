@@ -26,7 +26,7 @@ object CommandExecutor {
 
         return try {
             when (type) {
-                "LOCK"        -> lock(context)
+                "LOCK"        -> lock(context, payload)
                 "UNLOCK"      -> unlock(context)
                 "INSTALL_APK" -> installApk(context, command)
                 "REBOOT"      -> reboot(context)
@@ -47,13 +47,18 @@ object CommandExecutor {
     }
 
     // ── LOCK ─────────────────────────────────────────────────────────────────
-    private fun lock(context: Context): Boolean {
+    private fun lock(context: Context, payload: org.json.JSONObject? = null): Boolean {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val admin = ComponentName(context, DpcAdminReceiver::class.java)
         return if (dpm.isAdminActive(admin)) {
             // 1. Persist lock state (survives reboot)
             Prefs.setDeviceLocked(context, true)
             Prefs.setLockReason(context, "server")
+            // 1b. Persist optional custom message / emergency phone from dashboard
+            val customMsg = payload?.optString("message", "") ?: ""
+            val customPhone = payload?.optString("phone", "") ?: ""
+            if (customMsg.isNotBlank()) Prefs.setCustomLockMessage(context, customMsg)
+            if (customPhone.isNotBlank()) Prefs.setCustomLockPhone(context, customPhone)
             // 2. Apply extra restrictions if Device Owner
             if (dpm.isDeviceOwnerApp(context.packageName)) {
                 applyLockdownRestrictions(dpm, admin, context)
@@ -127,6 +132,7 @@ object CommandExecutor {
             "no_config_mobile"        -> android.os.UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS
             "no_debugging_features"   -> android.os.UserManager.DISALLOW_DEBUGGING_FEATURES
             "no_oem_unlock"           -> "no_oem_unlock" // custom key, not in UserManager
+            "no_camera"               -> "no_camera" // custom key, handled via setCameraDisabled
             else -> {
                 Log.w(TAG, "Unknown restriction key: $key")
                 null
@@ -149,10 +155,10 @@ object CommandExecutor {
             val key = restrictions.optString(i)
             val constant = resolveRestriction(key) ?: continue
             try {
-                if (constant == "no_oem_unlock") {
-                    dpm.addUserRestriction(admin, "no_oem_unlock")
-                } else {
-                    dpm.addUserRestriction(admin, constant)
+                when (constant) {
+                    "no_oem_unlock" -> dpm.addUserRestriction(admin, "no_oem_unlock")
+                    "no_camera" -> dpm.setCameraDisabled(admin, true)
+                    else -> dpm.addUserRestriction(admin, constant)
                 }
                 Log.i(TAG, "✅ Restriction applied: $key")
             } catch (e: Exception) {
@@ -178,10 +184,10 @@ object CommandExecutor {
             val key = restrictions.optString(i)
             val constant = resolveRestriction(key) ?: continue
             try {
-                if (constant == "no_oem_unlock") {
-                    dpm.clearUserRestriction(admin, "no_oem_unlock")
-                } else {
-                    dpm.clearUserRestriction(admin, constant)
+                when (constant) {
+                    "no_oem_unlock" -> dpm.clearUserRestriction(admin, "no_oem_unlock")
+                    "no_camera" -> dpm.setCameraDisabled(admin, false)
+                    else -> dpm.clearUserRestriction(admin, constant)
                 }
                 Log.i(TAG, "✅ Restriction removed: $key")
             } catch (e: Exception) {
@@ -234,6 +240,14 @@ object CommandExecutor {
                 } catch (_: Exception) {
                     // Package doesn't exist or already enabled
                 }
+            }
+
+            // Also re-enable camera if it was disabled
+            try {
+                dpm.setCameraDisabled(admin, false)
+                Log.i(TAG, "📷 Camera re-enabled")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not re-enable camera: ${e.message}")
             }
 
             Log.i(TAG, "✅ System apps restored: $restored apps enabled")

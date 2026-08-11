@@ -7,21 +7,25 @@ import {
   CreditCard, Bell, Settings, Cpu, Apple, QrCode, BookOpen, LogOut,
 } from 'lucide-react';
 
-const navItems = [
-  { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard' },
+type NavSection = { section: string };
+type NavLink = { href: string; icon: React.ComponentType<{ size?: number }>; label: string };
+type NavItem = NavSection | NavLink;
+
+const navItems: NavItem[] = [
+  { href: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
   { section: 'Fleet' },
-  { href: '/customers',  icon: Users, label: 'Customers' },
-  { href: '/devices',    icon: Smartphone, label: 'Devices' },
-  { href: '/rentals',    icon: ClipboardList, label: 'Rentals' },
+  { href: '/customers',     icon: Users,           label: 'Customers' },
+  { href: '/devices',       icon: Smartphone,      label: 'Devices' },
+  { href: '/rentals',       icon: ClipboardList,   label: 'Rentals' },
   { section: 'Finance' },
-  { href: '/payments',   icon: CreditCard, label: 'Payments' },
-  { href: '/reminders',  icon: Bell, label: 'Reminders' },
+  { href: '/payments',      icon: CreditCard,      label: 'Payments' },
+  { href: '/reminders',     icon: Bell,            label: 'Reminders' },
   { section: 'System' },
-  { href: '/settings',       icon: Settings, label: 'Settings' },
-  { href: '/android-setup',  icon: Cpu, label: 'Android EMM Setup' },
-  { href: '/ios-setup',      icon: Apple, label: 'iOS MDM Setup' },
-  { href: '/enroll',         icon: QrCode, label: 'สร้าง QR ลงทะเบียน' },
-  { href: '/guide',          icon: BookOpen, label: 'คู่มือการใช้งาน' },
+  { href: '/settings',      icon: Settings,        label: 'Settings' },
+  { href: '/android-setup', icon: Cpu,             label: 'Android EMM' },
+  { href: '/ios-setup',     icon: Apple,           label: 'iOS MDM' },
+  { href: '/enroll',        icon: QrCode,          label: 'QR Enroll' },
+  { href: '/guide',         icon: BookOpen,        label: 'Guide' },
 ];
 
 export default function Sidebar() {
@@ -30,42 +34,64 @@ export default function Sidebar() {
 
   return (
     <aside className="sidebar">
+      {/* Logo */}
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon"><Smartphone size={24} /></div>
+        <div className="sidebar-logo-icon">
+          <Smartphone size={18} color="#fff" />
+        </div>
         <div>
           <div className="sidebar-logo-text">RentControl</div>
           <div className="sidebar-logo-sub">Device Management</div>
         </div>
       </div>
 
+      {/* Navigation */}
       <nav className="sidebar-nav">
         {navItems.map((item, i) => {
           if ('section' in item) {
-            return <div key={i} className="nav-section-label">{item.section}</div>;
+            return (
+              <div key={i} className="nav-section-label">
+                {item.section}
+              </div>
+            );
           }
-          const active = pathname === item.href || pathname.startsWith(item.href + '/');
+          const active =
+            pathname === item.href ||
+            (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
           const Icon = item.icon;
           return (
-            <Link key={item.href} href={item.href!} className={`nav-item ${active ? 'active' : ''}`}>
-              <span className="nav-item-icon"><Icon size={18} /></span>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`nav-item${active ? ' active' : ''}`}
+            >
+              <span className="nav-item-icon">
+                <Icon size={16} />
+              </span>
               {item.label}
             </Link>
           );
         })}
       </nav>
 
+      {/* User footer */}
       <div className="sidebar-footer">
         <div className="sidebar-user">
-          <div className="sidebar-avatar">{user?.name?.[0]?.toUpperCase() || 'A'}</div>
-          <div>
-            <div className="sidebar-user-name">{user?.name || 'Admin'}</div>
-            <div className="sidebar-user-role">{user?.role || 'admin'}</div>
+          <div className="sidebar-avatar">
+            {user?.name?.[0]?.toUpperCase() ?? 'A'}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="sidebar-user-name">{user?.name ?? 'Admin'}</div>
+            <div className="sidebar-user-role">{user?.role ?? 'admin'}</div>
           </div>
           <button
             onClick={logout}
-            style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-            title="Logout"
-          ><LogOut size={18} /></button>
+            className="btn-icon"
+            title="Log out"
+            style={{ width: 28, height: 28, flexShrink: 0 }}
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </div>
     </aside>
