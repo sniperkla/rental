@@ -23,6 +23,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://rental-backend.eaqdragon.com:3001/api
+        NEXT_PUBLIC_BACKEND_URL: https://rental-frontend.eaqdragon.com:3001
     container_name: rental_frontend
     restart: unless-stopped
     env_file:
