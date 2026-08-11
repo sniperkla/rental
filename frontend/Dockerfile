@@ -16,6 +16,12 @@ COPY . .
 # Disable Next.js telemetry during build time
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Accept NEXT_PUBLIC_* vars at build time (they get baked into the JS bundle)
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_BACKEND_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+
 # Build the Next.js application
 RUN npm run build
 

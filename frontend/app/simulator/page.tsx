@@ -29,7 +29,7 @@ export default function SimulatorPage() {
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('rental_token') : null;
     if (token) {
-      axios.get('http://localhost:3001/api/devices', {
+      axios.get(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/devices`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(res => {
@@ -53,7 +53,7 @@ export default function SimulatorPage() {
 
     setPolling(true);
     const fetchStatus = () => {
-      axios.get(`http://localhost:3001/api/devices/status/serial/${selectedSerial}`)
+      axios.get(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/devices/status/serial/${selectedSerial}`)
         .then(res => {
           setCurrentDevice(res.data);
         })

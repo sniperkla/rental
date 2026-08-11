@@ -90,7 +90,7 @@ function RestrictionsModal({ device, onClose, onSave }: { device: Device; onClos
     { key: 'factoryReset',    icon: '🏭', label: 'Factory Reset',     color: '#F59E0B', backendKey: 'no_factory_reset',        alwaysOn: false },
     { key: 'safeBoot',        icon: '🛡️', label: 'Safe Boot',         color: '#EF4444', backendKey: 'no_safe_boot',            alwaysOn: true },
     { key: 'oemUnlock',       icon: '🔓', label: 'OEM Unlock',        color: '#EF4444', backendKey: 'no_oem_unlock',           alwaysOn: true },
-    { key: 'camera',          icon: '📷', label: 'Camera',            color: '#EF4444', backendKey: 'no_debugging_features',    alwaysOn: false },
+    { key: 'camera',          icon: '📷', label: 'Camera',            color: '#EF4444', backendKey: 'no_camera',               alwaysOn: false },
     { key: 'wifi',            icon: '📶', label: 'Wi-Fi',             color: '#3B82F6', backendKey: 'no_config_wifi',           alwaysOn: false },
     { key: 'installApps',     icon: '📦', label: 'Install Apps',      color: '#F59E0B', backendKey: 'no_install_apps',          alwaysOn: false },
     { key: 'usbTransfer',     icon: '🔌', label: 'USB Transfer',      color: '#8B5CF6', backendKey: 'no_usb_file_transfer',     alwaysOn: false },
