@@ -35,6 +35,7 @@ object CommandExecutor {
                 "RESTRICT"    -> applyRestrictions(context, payload)
                 "UNRESTRICT"  -> removeRestrictions(context, payload)
                 "RESTORE_SYSTEM_APPS" -> restoreSystemApps(context)
+                "SET_FRP_ACCOUNTS" -> setFrpAccounts(context, payload)
                 else -> {
                     Log.w(TAG, "Unknown command type: $type")
                     false
@@ -446,6 +447,49 @@ object CommandExecutor {
             true
         } catch (e: Exception) {
             Log.e(TAG, "Unenroll failed: ${e.message}")
+            false
+        }
+    }
+
+    // ── SET FRP ACCOUNTS ─────────────────────────────────────────────────────
+    /**
+     * Set the Google accounts authorized to unlock device after a factory reset.
+     * Backend sends: { "accounts": ["admin@yourcompany.com"] }
+     *
+     * After this, if anyone forces a recovery reset, device boots into FRP screen
+     * and demands one of these accounts before allowing setup wizard to proceed.
+     */
+    private fun setFrpAccounts(context: Context, payload: JSONObject?): Boolean {
+        if (payload == null) return false
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        val admin = ComponentName(context, DpcAdminReceiver::class.java)
+
+        if (!dpm.isDeviceOwnerApp(context.packageName)) {
+            Log.w(TAG, "Not Device Owner — cannot set FRP policy")
+            return false
+        }
+
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            Log.w(TAG, "FRP policy requires Android 11+ — device is API ${android.os.Build.VERSION.SDK_INT}")
+            return false
+        }
+
+        return try {
+            val accountsArray = payload.optJSONArray("accounts") ?: return false
+            val accounts = (0 until accountsArray.length()).map { accountsArray.getString(it) }
+
+            // Persist accounts so they survive app restarts and are re-applied on boot
+            Prefs.setFrpAccounts(context, accounts)
+
+            val policy = android.app.admin.FactoryResetProtectionPolicy.Builder()
+                .setFactoryResetProtectionAccounts(accounts)
+                .setFactoryResetProtectionEnabled(true)
+                .build()
+            dpm.setFactoryResetProtectionPolicy(admin, policy)
+            Log.i(TAG, "✅ FRP policy set — ${accounts.size} account(s): ${accounts.joinToString()}")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set FRP accounts: ${e.message}")
             false
         }
     }

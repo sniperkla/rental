@@ -64,8 +64,8 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
         Log.i(TAG, "🛡️ Device Owner detected — applying security policies (hideLauncher=$hideFromLauncher)")
 
         try {
-            // Block factory reset — customer must not wipe MDM to bypass lock
-            // TODO: Re-enable after testing. dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_FACTORY_RESET)
+            // Block factory reset via Settings — prevents user from wiping to bypass MDM
+            dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_FACTORY_RESET)
 
             // Block safe boot (prevents bypassing via safe mode)
             dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_SAFE_BOOT)
@@ -93,6 +93,10 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
             // Lock Task Mode works without overlay permission (required for QR provisioning)
             LockTaskHelper.configure(context)
 
+            // Enforce FRP: after any wipe, device demands our backend Google account
+            // before letting anyone past the setup wizard — device is useless to them
+            applyFrpPolicy(context, dpm, admin)
+
             if (hideFromLauncher) {
                 hideFromLauncher(context)
             } else {
@@ -102,6 +106,37 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
             Log.i(TAG, "✅ Device Owner policies applied")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to apply Device Owner policies: ${e.message}")
+        }
+    }
+
+    /**
+     * Enforce Factory Reset Protection (FRP).
+     *
+     * If a user physically enters recovery mode and wipes the device, FRP kicks in
+     * on first boot and blocks the setup wizard until our authorized Google account
+     * is entered. The device becomes a brick to anyone without those credentials.
+     *
+     * Works on any Android device (API 30+) — no OEM SDK required.
+     */
+    private fun applyFrpPolicy(context: Context, dpm: DevicePolicyManager, admin: ComponentName) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            Log.d(TAG, "FRP policy API requires Android 11+ — skipping on API ${android.os.Build.VERSION.SDK_INT}")
+            return
+        }
+        try {
+            val frpAccounts = Prefs.getFrpAccounts(context)
+            if (frpAccounts.isEmpty()) {
+                Log.d(TAG, "No FRP accounts configured — skipping FRP policy")
+                return
+            }
+            val policy = android.app.admin.FactoryResetProtectionPolicy.Builder()
+                .setFactoryResetProtectionAccounts(frpAccounts)
+                .setFactoryResetProtectionEnabled(true)
+                .build()
+            dpm.setFactoryResetProtectionPolicy(admin, policy)
+            Log.i(TAG, "✅ FRP policy applied — ${frpAccounts.size} authorized account(s)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to apply FRP policy: ${e.message}")
         }
     }
 
@@ -157,6 +192,10 @@ class DpcAdminReceiver : DeviceAdminReceiver() {
         if (!registrationToken.isNullOrBlank() && !backendUrl.isNullOrBlank()) {
             Log.i(TAG, "Found registration token — auto-registering with backend: $backendUrl")
             Prefs.setAdminWasEverActive(context)
+
+            // Persist enrollment config so post-wipe re-enrollment can happen automatically
+            // (BootReceiver reads this on first boot after wipe)
+            Prefs.saveEnrollmentConfig(context, registrationToken, backendUrl)
 
             ApiHelper.selfRegister(
                 context = context,

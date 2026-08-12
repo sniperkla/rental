@@ -209,4 +209,47 @@ object Prefs {
     }
 
     fun clear(ctx: Context) = get(ctx).edit().clear().apply()
+
+    // ── Factory Reset Protection (FRP) ─────────────────────────────────────
+    // Comma-separated list of Google account emails authorized to unlock device after wipe.
+    // Set by your backend during enrollment via the RESTRICT command or hardcoded here.
+    private const val KEY_FRP_ACCOUNTS = "frp_accounts"
+
+    fun setFrpAccounts(ctx: Context, accounts: List<String>) {
+        get(ctx).edit().putString(KEY_FRP_ACCOUNTS, accounts.joinToString(",")).apply()
+    }
+
+    fun getFrpAccounts(ctx: Context): List<String> {
+        val raw = get(ctx).getString(KEY_FRP_ACCOUNTS, "") ?: ""
+        return if (raw.isBlank()) emptyList() else raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    }
+
+    // ── Enrollment Config (survives Prefs.clear on unenroll for re-enroll after wipe) ──
+    // NOTE: SharedPreferences are wiped on factory reset anyway — this is used for
+    // re-enrollment when the device is managed (not wiped) but app data is cleared.
+    // The real post-wipe re-enrollment flow relies on QR provisioning repeating.
+    private const val KEY_ENROLLMENT_TOKEN = "enrollment_token_baked"
+    private const val KEY_ENROLLMENT_BACKEND = "enrollment_backend_baked"
+
+    /** Persist the enrollment token + backend URL from QR provisioning. */
+    fun saveEnrollmentConfig(ctx: Context, token: String, backendUrl: String) {
+        // Use a separate prefs file marked as not cleared on backup wipe
+        ctx.getSharedPreferences("dpc_enrollment_config", Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_ENROLLMENT_TOKEN, token)
+            .putString(KEY_ENROLLMENT_BACKEND, backendUrl)
+            .apply()
+    }
+
+    fun getEnrollmentToken(ctx: Context): String =
+        ctx.getSharedPreferences("dpc_enrollment_config", Context.MODE_PRIVATE)
+            .getString(KEY_ENROLLMENT_TOKEN, "") ?: ""
+
+    fun getEnrollmentBackendUrl(ctx: Context): String =
+        ctx.getSharedPreferences("dpc_enrollment_config", Context.MODE_PRIVATE)
+            .getString(KEY_ENROLLMENT_BACKEND, "") ?: ""
+
+    fun hasEnrollmentConfig(ctx: Context): Boolean =
+        ctx.getSharedPreferences("dpc_enrollment_config", Context.MODE_PRIVATE)
+            .contains(KEY_ENROLLMENT_TOKEN)
 }
